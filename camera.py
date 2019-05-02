@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 import numpy as np
+from ray import Ray
 import utils
 
 
@@ -18,6 +19,7 @@ class Camera(object):
         k, m = np.asarray(k), np.asarray(m)
         self.m, self.k = m, k
         self.minv, self.kinv = np.linalg.pinv(m), np.linalg.pinv(k)
+        self.z_sign = np.sign(m[2, 3])
 
     @property
     def r(self):
@@ -33,11 +35,14 @@ class Camera(object):
     def p(self):
         return self.k.dot(self.m)
 
+    @property
+    def pos(self):
+        return -self.r.T.dot(self.t)
+
     def _make_cam_plot(self):
         fig = plt.figure()
         ax = fig.gca(projection='3d')
-        r, t = self.r, self.t
-        pos = -r.T.dot(t)
+        r, pos = self.r, self.pos
         u, v, w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
         # Camera frame
         ax.text(pos[0], pos[1], pos[2], 'Camera')
@@ -57,10 +62,10 @@ class Camera(object):
                   [pos[2], pos[2] + w[2]],
                   color='blue')
         # Boundaries
-        upperleft = self.pixto3d([0, 0, 1])
-        upperright = self.pixto3d([0, self.w, 1])
-        lowerleft = self.pixto3d([self.h, 0, 1])
-        lowerright = self.pixto3d([self.h, self.w, 1])
+        upperleft = self.get_focalplane_pt([0, 0])
+        upperright = self.get_focalplane_pt([0, self.w])
+        lowerleft = self.get_focalplane_pt([self.h, 0])
+        lowerright = self.get_focalplane_pt([self.h, self.w])
         ax.plot3D([pos[0], upperleft[0] + 300*(upperleft[0] - pos[0])],
                   [pos[1], upperleft[1] + 300*(upperleft[1] - pos[1])],
                   [pos[2], upperleft[2] + 300*(upperleft[2] - pos[2])],
@@ -83,9 +88,17 @@ class Camera(object):
         utils.set_axes_equal(ax)
         return fig, ax
 
-    def pixto3d(self, x):
-        x = self.kinv.dot(x) + [0, 0, 0, 1]
+    def get_focalplane_pt(self, x):
+        assert isinstance(x, (list, tuple))
+        x = self.kinv.dot(x + [1]) + [0, 0, 0, 1]
         return self.minv.dot(x)[:3]
+
+    def get_scene_ray(self, x):
+        src = self.pos
+        dest = self.minv.dot(
+            self.kinv.dot(x + [self.z_sign]) + [0, 0, 0, 1]
+        )[:3]
+        return Ray(src, dest)
 
     def plot_camera3d(self):
         fig, ax = self._make_cam_plot()
