@@ -1,3 +1,67 @@
+def test_get_radiological_path():
+    import numpy as np
+    from box import Box
+    from ray import Ray
+    c = np.array([-3, -2, 0])
+    i = np.array([0, 4, 0])
+    j = np.array([-2, 0, 1])
+    k = np.array([3, 0, 0])
+    l = np.array([-1, -1, 1])
+    m = np.array([-2, 4, 1])
+    n = np.array([-3, -1.5, 1.5])
+    o = np.array([-3, -2, 1.5])
+    p = np.array([-2, -2, 1])
+    q = np.array([0, 0, 0])
+    r = np.array([-2, -2, 2])
+    s = np.array([-1.2, -2, 1.2])
+    t = np.array([-1.2, 0, 1])
+    ln = 2.12
+    jp = 2
+    jo = 2.29
+    lr = 1.73
+    tl = 1.02
+    sl = 1.04
+    rij = Ray(i, j)
+    rkl = Ray(k, l)
+    rmj = Ray(m, j)
+    rql = Ray(q, l)
+    ril = Ray(i, l)
+    rml = Ray(m, l)
+    box = Box(c, [3, 3, 3], [1, 1, 1])
+    alphas_rij = (1.0, 1.5, 0.5, 1.5, 1.0, 1.5, 0.0, 2.0)
+    alphas_rkl = (1.0, 1.5, 1.0, 1.5, -0.0, 2.0, 0.0, 2.0)
+    alphas_rmj = (1.0, 1.5, float("-inf"), float("inf"), 1.0, 1.5, float("-inf"), float("inf"))
+    alphas_rql = (1.0, 2.0, 1.0, 3.0, -0.0, 2.0, 0.0, 2.0)
+    alphas_ril = (1.0, 1.2, 1.0, 3.0, 0.8, 1.2, 0.0, 2.0)
+    alphas_rml = (0.8, 1.0, -1.0, 1.0, 0.8, 1.2, float("-inf"), float(" inf"))
+    print(alphas_ril)
+    print(alphas_rml)
+    np.testing.assert_almost_equal(k + (alphas_rkl[0])*(l-k), l)
+    np.testing.assert_almost_equal(k + (alphas_rkl[1])*(l-k), n)
+    np.testing.assert_almost_equal(box.get_radiological_path(alphas_rkl, rkl), ln, decimal=2)
+    print('Test 1 OK')
+    np.testing.assert_almost_equal(i + (alphas_rij[0])*(j-i), j)
+    np.testing.assert_almost_equal(i + (alphas_rij[1])*(j-i), o)
+    np.testing.assert_almost_equal(box.get_radiological_path(alphas_rij, rij), jo, decimal=2)
+    print('Test 2 OK')
+    np.testing.assert_almost_equal(m + (alphas_rmj[0])*(j-m), j)
+    np.testing.assert_almost_equal(m + (alphas_rmj[1])*(j-m), p)
+    np.testing.assert_almost_equal(box.get_radiological_path(alphas_rmj, rmj), jp, decimal=2)
+    print('Test 3 OK')
+    np.testing.assert_almost_equal(q + (alphas_rql[0])*(l-q), l)
+    np.testing.assert_almost_equal(q + (alphas_rql[1])*(l-q), r)
+    np.testing.assert_almost_equal(box.get_radiological_path(alphas_rql, rql), lr, decimal=2)
+    print('Test 4 OK')
+    np.testing.assert_almost_equal(i + (alphas_ril[0])*(l-i), l)
+    np.testing.assert_almost_equal(i + (alphas_ril[1])*(l-i), s)
+    np.testing.assert_almost_equal(box.get_radiological_path(alphas_ril, ril), sl, decimal=2)
+    print('Test 5 OK')
+    np.testing.assert_almost_equal(m + (alphas_rml[0])*(m-l), t)
+    np.testing.assert_almost_equal(m + (alphas_rml[1])*(m-l), l)
+    np.testing.assert_almost_equal(box.get_radiological_path(alphas_rml, rml), tl, decimal=2)
+    print('Test 6 OK')
+
+
 def test_ray_minmax_intersec():
     import numpy as np
     from box import Box
@@ -76,6 +140,7 @@ def test_ray_minmax_intersec():
     pt1, pt2 = box.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 12 OK')
+
 
 def test_camera_plot():
     import numpy as np
