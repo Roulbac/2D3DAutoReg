@@ -35,7 +35,8 @@ class Box(object):
         return alphas
 
     def get_ray_minmax_intersec(self, ray):
-        amin, amax, axmin, axmax, aymin, aymax, azmin, azmax = self._get_ray_alphas(ray)
+        amin, amax, axmin, axmax, aymin, aymax, azmin, azmax = self._get_ray_alphas(
+            ray)
         if amin < amax and amin > 0:
             pt1 = ray.src + amin*(ray.dst - ray.src)
             # Catch case where amin < amax but the intersections do not lie within the cube
@@ -51,38 +52,36 @@ class Box(object):
             return None, None
 
     @staticmethod
-    def get_iminmax_alpha(p1, p2, n, b, s, axmin, axmax, amin, amax):
-        if p1-p2 == 0:
+    def get_ax(p1, p2, n, b, s, axmin, axmax, amin, amax):
+        # IMPORTANT: Replace ceil(x) with floor(x+1) and floor(x) with ceil(x-1)
+        if p1 == p2:
             a = float("inf")
         elif p1 < p2:
-            imin = math.ceil((p1 + amin*(p2-p1) - b)/s) if amin != axmin else 1
-            imax = math.ceil((p1 + amax*(p2-p1) - b)/s - 1) if amax != axmax else n-1
-            a = ((b + imin*s) - p1)/(p2-p1) if imin != imax else float("inf")
+            imin = math.floor((p1 + amin*(p2-p1) - b)/s + 1) if amin != axmin else 1
+            a = ((b + imin*s) - p1)/(p2-p1)
         else:
-            imin = math.ceil((p1 + amax*(p2-p1) - b)/s) if amax != axmax else 0
             imax = math.ceil((p1 + amin*(p2-p1) - b)/s - 1) if amin != axmin else n-2
-            a = ((b + imax*s) - p1)/(p2-p1) if imin != imax else float("inf")
+            a = ((b + imax*s) - p1)/(p2-p1)
         return a
 
     def get_radiological_path(self, alphas, ray):
         amin, amax, axmin, axmax, aymin, aymax, azmin, azmax = alphas
         src, dst = ray.src, ray.dst
         # Calculate ijk min/max
-        ax = Box.get_iminmax_alpha(
+        ax = Box.get_ax(
             src[0], dst[0], self.nx, self.bx, self.sx, axmin, axmax, amin, amax)
-        ay = Box.get_iminmax_alpha(
+        ay = Box.get_ax(
             src[1], dst[1], self.ny, self.by, self.sy, aymin, aymax, amin, amax)
-        az = Box.get_iminmax_alpha(
+        az = Box.get_ax(
             src[2], dst[2], self.nz, self.bz, self.sz, azmin, azmax, amin, amax)
-        # np = (imax - imin + 1) + (jmax - jmin + 1) + (kmax - kmin + 1)
         dconv = math.sqrt((dst[0]-src[0])**2 + (dst[1]-src[1])**2 + (dst[2] - src[2])**2)
         d12, ac = 0, amin
-        i = math.ceil(
-            (src[0] + 0.5*(min(ax, ay, az) + amin)*(dst[0]-src[0]) - self.bx)/self.sx - 1)
-        j = math.ceil(
-            (src[1] + 0.5*(min(ax, ay, az) + amin)*(dst[1]-src[1]) - self.by)/self.sy - 1)
-        k = math.ceil(
-            (src[2] + 0.5*(min(ax, ay, az) + amin)*(dst[2]-src[2]) - self.bz)/self.sz - 1)
+        i = math.floor(
+            (src[0] + 0.5*(min(ax, ay, az) + amin)*(dst[0]-src[0]) - self.bx)/self.sx)
+        j = math.floor(
+            (src[1] + 0.5*(min(ax, ay, az) + amin)*(dst[1]-src[1]) - self.by)/self.sy)
+        k = math.floor(
+            (src[2] + 0.5*(min(ax, ay, az) + amin)*(dst[2]-src[2]) - self.bz)/self.sz)
         while 0 <= i < self.nx - 1 and 0 <= j < self.ny - 1 and 0 <= k < self.nz - 1:
             if ax == min(ax, ay, az):
                 d12 = d12 + (ax - ac)*dconv*self.rho[i, j, k]
