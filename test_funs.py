@@ -5,58 +5,64 @@ def test_trace_rays_pycuda():
     from pycuda.compiler import SourceModule
     import numpy as np
     import matplotlib.pyplot as plt
+    # Define data
     with open('cuda_funs.cu', 'r') as f:
-        s = f.read()
-    mod = SourceModule(s)
+        cuda_src = f.read()
+    mod = SourceModule(cuda_src)
     m = np.array([[1, 0, 0,  2],
                   [0, 0, -1, 1],
                   [0, 1, 0,  -4],
                   [0, 0, 0,  1]])
-    minv = np.linalg.pinv(m).flatten().astype(np.float32)
     h = np.int32(720)
     w = np.int32(720)
     src = np.array([-2, 4, 1], dtype=np.float32)
-    bs = np.array([-3, -2, 0], dtype=np.float32)
-    ns = np.array([3, 3, 3], dtype=np.int32)
-    spacing = np.array([1, 1, 1], dtype=np.float32)
+    b = np.array([-3, -2, 0], dtype=np.float32)
+    n = np.array([3, 3, 3], dtype=np.int32)
+    sp = np.array([1, 1, 1], dtype=np.float32)
     z_sign = np.int32(-1)
     k = np.array([[2*(h/2), 0,       1*(h/2), 0],
                   [0,       2*(w/2), 1*(w/2), 0],
                   [0,       0,       1,       0]])
+    # Compute transformations of data
+    minv = np.linalg.pinv(m).flatten().astype(np.float32)
     kinv = np.linalg.pinv(k).flatten().astype(np.float32)
-    d_minv = cuda.mem_alloc(minv.nbytes)
-    d_kinv = cuda.mem_alloc(kinv.nbytes)
     dsts = np.zeros(h*w*3, dtype=np.float32)
     raysums = np.zeros(h*w, dtype=np.float32)
-    rho = np.ones((ns-1).tolist(), dtype=np.float32)
+    rho = np.ones((n-1).tolist(), dtype=np.float32)
+    # Allocate on device
+    d_minv = cuda.mem_alloc(minv.nbytes)
+    d_kinv = cuda.mem_alloc(kinv.nbytes)
     d_dsts = cuda.mem_alloc(dsts.nbytes)
     d_raysums = cuda.mem_alloc(raysums.nbytes)
     d_rho = cuda.mem_alloc(rho.nbytes)
-    d_bs = cuda.mem_alloc(bs.nbytes)
-    d_ns = cuda.mem_alloc(ns.nbytes)
-    d_spacing = cuda.mem_alloc(spacing.nbytes)
     d_src = cuda.mem_alloc(src.nbytes)
+    d_sp = cuda.mem_alloc(sp.nbytes)
+    d_n = cuda.mem_alloc(n.nbytes)
+    d_b = cuda.mem_alloc(b.nbytes)
+    # Get pointers to consts
+    # Copy data to device
     cuda.memcpy_htod(d_minv, minv)
     cuda.memcpy_htod(d_kinv, kinv)
-    cuda.memcpy_htod(d_bs, bs)
-    cuda.memcpy_htod(d_ns, ns)
-    cuda.memcpy_htod(d_spacing, spacing)
     cuda.memcpy_htod(d_rho, rho)
     cuda.memcpy_htod(d_src, src)
-    f_backproj = mod.get_function('backprojectPixel')
+    cuda.memcpy_htod(d_sp, sp)
+    cuda.memcpy_htod(d_n, n)
+    cuda.memcpy_htod(d_b, b)
+    # Initialize kernels
     block = (16, 16, 1)
     grid = (math.ceil(h/block[0]), math.ceil(w/block[1]))
+    f_backproj = mod.get_function('backprojectPixel')
     f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
-    f_backproj.prepared_call(
-        grid, block, h, w, d_dsts, d_minv, d_kinv, z_sign
-    )
+    f_backproj.prepared_call(grid, block, h, w, d_dsts, d_minv, d_kinv, z_sign)
     f_trace_rays = mod.get_function('traceRay')
     f_trace_rays.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
-    f_trace_rays.prepared_call(
-        grid, block, d_src, d_dsts, d_raysums, d_rho, d_bs, d_ns, d_spacing, h, w)
+    f_trace_rays.prepared_call(grid, block, d_src, d_dsts, d_raysums, d_rho,
+                               d_b, d_sp, d_n, h, w)
+    # Copy results and free memory
     cuda.memcpy_dtoh(raysums, d_raysums)
-    raysums = (raysums - raysums.min())/(raysums.max() - raysums.min())
+    print(raysums.max())
     plt.imsave('raysums.png', raysums.reshape((h, w)), cmap='gray')
+    print('Write raysums.png')
 
 
 def test_trace_rays():
