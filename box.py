@@ -8,104 +8,13 @@ try:
     _IMP_PYCUDA = True
 except ImportError:
     _IMP_PYCUDA = False
-    print('Could not import pycuda')
 
 MU_WATER = 0.85684356
 MU_AIR = 0.0007937816
-MAX_FLOAT32 = 3.4028e+038;
-MIN_FLOAT32 = -3.4028e+038;
-EPS_FLOAT32 = 2.22045e-016;
+MAX_FLOAT32 = 3.4028e+038
+MIN_FLOAT32 = -3.4028e+038
+EPS_FLOAT32 = 2.22045e-016
 
-@jit(nopython=True)
-def _cpu_backproject_pixel(h, w, minv, kinv, z_sign, i, j):
-    dotx = z_sign*(kinv[0]*i + kinv[1]*j + kinv[2]*1)
-    doty = z_sign*(kinv[3]*i + kinv[4]*j + kinv[5]*1)
-    dotz = z_sign*(kinv[6]*i + kinv[7]*j + kinv[8]*1)
-    dstx = minv[0]*dotx + minv[1]*doty + minv[2]*dotz + minv[3]*1
-    dsty = minv[5]*dotx + minv[5]*doty + minv[6]*dotz + minv[7]*1
-    dstz = minv[8]*dotx + minv[9]*doty + minv[10]*dotz + minv[11]*1
-    return np.array([dstx, dsty, dstz], dtype=np.float32)
-
-@jit(nopython=True)
-def _cpu_trace_ray(srx, sry, srz,
-                   dstx, dsty, dstz,
-                   nx, ny, nz,
-                   bx, by, bz,
-                   spx, spy, spz,
-                   rho):
-    # Calculate alphas
-    axmin, axmax = _get_alphas(bx, spx, srx, dstx, nx)
-    aymin, aymax = _get_alphas(by, spy, sry, dsty, ny)
-    azmin, azmax = _get_alphas(bz, spz, srz, dstz, nz)
-    amin, amax = max(axmin, aymin, azmin), min(axmax, aymax, azmax)
-    # Check intersection
-    if amin >= amax or amin < 0:
-        return 1
-    else:
-        ptx = srx + amin*(dstx - srx)
-        pty = sry + amin*(dsty - sry)
-        ptz = srz + amin*(dstz - srz)
-        if (ptx > (bx + (nx-1)*spx) or ptx < bx) or \
-           (pty > (by + (ny-1)*spy) or pty < by) or \
-           (ptz > (bz + (nz-1)*spz) or ptz < bz):
-            return 1
-    # Calculate ijk min/max
-    ax = _get_ax(srx, dstx, nx, bx, spx, axmin, axmax, amin, amax)
-    ay = _get_ax(sry, dsty, ny, by, spy, aymin, aymax, amin, amax)
-    az = _get_ax(srz, dstz, nz, bz, spz, azmin, azmax, amin, amax)
-    dconv = math.sqrt((dstx-srx)**2 + (dsty-sry)**2 + (dstz - srz)**2)
-    d12, ac = 0, amin
-    i = math.floor(
-        (srx + 0.5*(min(ax, ay, az) + amin)*(dstx-srx) - bx)/spx)
-    j = math.floor(
-        (sry + 0.5*(min(ax, ay, az) + amin)*(dsty-sry) - by)/spy)
-    k = math.floor(
-        (srz + 0.5*(min(ax, ay, az) + amin)*(dstz-srz) - bz)/spz)
-    # Go forward in the ray
-    while 0 <= i < nx - 1 and 0 <= j < ny - 1 and 0 <= k < nz - 1:
-        idx = i + (nx-1)*j + (nx-1)*(ny-1)*k
-        mu = (rho[idx]*(MU_WATER-MU_AIR)/1000 + MU_WATER)
-        if ax == min(ax, ay, az):
-            d12 = d12 + (ax - ac)*dconv*mu
-            i = i + 1 if srx < dstx else i - 1
-            ac = ax
-            ax = ax + spx/(abs(dstx - srx))
-        elif ay == min(ax, ay, az):
-            d12 = d12 + (ay - ac)*dconv*mu
-            j = j + 1 if sry < dsty else j - 1
-            ac = ay
-            ay = ay + spy/(abs(dsty - sry))
-        elif az == min(ax, ay, az):
-            d12 = d12 + (az - ac)*dconv*mu
-            k = k + 1 if srz < dstz else k - 1
-            ac = az
-            az = az + spz/(abs(dstz - srz))
-    return math.exp(-d12)
-
-@jit(nopython=True)
-def _get_alphas(b, s, p1, p2, n):
-    if abs(p2-p1) < 1e-10:
-        amin, amax = MIN_FLOAT32, MAX_FLOAT32
-    else:
-        amin, amax = (b-p1)/(p2-p1), (b+(n-1)*s-p1)/(p2-p1)
-    if amin > amax:
-        amin, amax = amax, amin
-    return amin, amax
-
-@jit(nopython=True)
-def _get_ax(p1, p2, n, b, s, axmin, axmax, amin, amax):
-    # IMPORTANT: Replace ceil(x) with floor(x+1) and floor(x) with ceil(x-1)
-    if p1 == p2:
-        a = MAX_FLOAT32
-    elif p1 < p2:
-        imin = math.floor((p1 + amin*(p2-p1) - b)/s +
-                          1) if amin != axmin else 1
-        a = ((b + imin*s) - p1)/(p2-p1)
-    else:
-        imax = math.ceil((p1 + amin*(p2-p1) - b)/s -
-                         1) if amin != axmin else n-2
-        a = ((b + imax*s) - p1)/(p2-p1)
-    return a
 
 class Box(object):
 
@@ -147,7 +56,7 @@ class Box(object):
                 self.kinv1, self.kinv2,
                 self.sp, self.n, self.b, self.rho,
                 self.cam1.z_sign, self.cam2.z_sign]
-        return Box._njit_trace_rays(*args)
+        return Box._jit_trace_rays(*args)
 
     def _cpu_init_cams(self, cam1, cam2):
         self.h1, self.w1 = cam1.h, cam1.w
@@ -161,7 +70,7 @@ class Box(object):
         self.b, self.n, self.sp = b, n, sp
 
     @jit(nopython=True)
-    def _njit_trace_rays(h1, w1,
+    def _jit_trace_rays(h1, w1,
                          h2, w2,
                          pos1, pos2,
                          minv1, minv2,
@@ -281,3 +190,97 @@ class Box(object):
         cuda.memcpy_dtoh(raysums1, self.d_raysums1)
         cuda.memcpy_dtoh(raysums2, self.d_raysums2)
         return raysums1.reshape((h1, w1)), raysums2.reshape((h2, w2))
+
+#------------------------JITTED CPU FUNCTIONS-----------------------
+# These cannot be class-scoped
+
+
+@jit(nopython=True)
+def _cpu_backproject_pixel(h, w, minv, kinv, z_sign, i, j):
+    dotx = z_sign*(kinv[0]*i + kinv[1]*j + kinv[2]*1)
+    doty = z_sign*(kinv[3]*i + kinv[4]*j + kinv[5]*1)
+    dotz = z_sign*(kinv[6]*i + kinv[7]*j + kinv[8]*1)
+    dstx = minv[0]*dotx + minv[1]*doty + minv[2]*dotz + minv[3]*1
+    dsty = minv[5]*dotx + minv[5]*doty + minv[6]*dotz + minv[7]*1
+    dstz = minv[8]*dotx + minv[9]*doty + minv[10]*dotz + minv[11]*1
+    return np.array([dstx, dsty, dstz], dtype=np.float32)
+
+@jit(nopython=True)
+def _cpu_trace_ray(srx, sry, srz,
+                   dstx, dsty, dstz,
+                   nx, ny, nz,
+                   bx, by, bz,
+                   spx, spy, spz,
+                   rho):
+    # Calculate alphas
+    axmin, axmax = _get_alphas(bx, spx, srx, dstx, nx)
+    aymin, aymax = _get_alphas(by, spy, sry, dsty, ny)
+    azmin, azmax = _get_alphas(bz, spz, srz, dstz, nz)
+    amin, amax = max(axmin, aymin, azmin), min(axmax, aymax, azmax)
+    # Check intersection
+    if amin >= amax or amin < 0:
+        return 1
+    else:
+        ptx = srx + amin*(dstx - srx)
+        pty = sry + amin*(dsty - sry)
+        ptz = srz + amin*(dstz - srz)
+        if (ptx > (bx + (nx-1)*spx) or ptx < bx) or \
+           (pty > (by + (ny-1)*spy) or pty < by) or \
+           (ptz > (bz + (nz-1)*spz) or ptz < bz):
+            return 1
+    # Calculate ijk min/max
+    ax = _get_ax(srx, dstx, nx, bx, spx, axmin, axmax, amin, amax)
+    ay = _get_ax(sry, dsty, ny, by, spy, aymin, aymax, amin, amax)
+    az = _get_ax(srz, dstz, nz, bz, spz, azmin, azmax, amin, amax)
+    dconv = math.sqrt((dstx-srx)**2 + (dsty-sry)**2 + (dstz - srz)**2)
+    d12, ac = 0, amin
+    i = math.floor(
+        (srx + 0.5*(min(ax, ay, az) + amin)*(dstx-srx) - bx)/spx)
+    j = math.floor(
+        (sry + 0.5*(min(ax, ay, az) + amin)*(dsty-sry) - by)/spy)
+    k = math.floor(
+        (srz + 0.5*(min(ax, ay, az) + amin)*(dstz-srz) - bz)/spz)
+    # Go forward in the ray
+    while 0 <= i < nx - 1 and 0 <= j < ny - 1 and 0 <= k < nz - 1:
+        idx = i + (nx-1)*j + (nx-1)*(ny-1)*k
+        mu = (rho[idx]*(MU_WATER-MU_AIR)/1000 + MU_WATER)
+        if ax == min(ax, ay, az):
+            d12 = d12 + (ax - ac)*dconv*mu
+            i = i + 1 if srx < dstx else i - 1
+            ac = ax
+            ax = ax + spx/(abs(dstx - srx))
+        elif ay == min(ax, ay, az):
+            d12 = d12 + (ay - ac)*dconv*mu
+            j = j + 1 if sry < dsty else j - 1
+            ac = ay
+            ay = ay + spy/(abs(dsty - sry))
+        elif az == min(ax, ay, az):
+            d12 = d12 + (az - ac)*dconv*mu
+            k = k + 1 if srz < dstz else k - 1
+            ac = az
+            az = az + spz/(abs(dstz - srz))
+    return math.exp(-d12)
+
+@jit(nopython=True)
+def _get_alphas(b, s, p1, p2, n):
+    if abs(p2-p1) < 1e-10:
+        amin, amax = MIN_FLOAT32, MAX_FLOAT32
+    else:
+        amin, amax = (b-p1)/(p2-p1), (b+(n-1)*s-p1)/(p2-p1)
+    if amin > amax:
+        amin, amax = amax, amin
+    return amin, amax
+
+@jit(nopython=True)
+def _get_ax(p1, p2, n, b, s, axmin, axmax, amin, amax):
+    # IMPORTANT: Replace ceil(x) with floor(x+1) and floor(x) with ceil(x-1)
+    if p1 == p2:
+        a = MAX_FLOAT32
+    elif p1 < p2:
+        imin = math.floor((p1 + amin*(p2-p1) - b)/s + 1) if amin != axmin else 1
+        a = ((b + imin*s) - p1)/(p2-p1)
+    else:
+        imax = math.ceil((p1 + amin*(p2-p1) - b)/s - 1) if amin != axmin else n-2
+        a = ((b + imax*s) - p1)/(p2-p1)
+    return a
+

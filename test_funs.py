@@ -19,13 +19,13 @@ def test_box_class():
     rho = np.ones((n-1).tolist(), dtype=np.float32)
     cam1 = Camera(m, k, h=h, w=w)
     cam2 = Camera(m, k, h=h, w=w)
-    box = Box('gpu')
+    box = Box('cpu')
     box.init_cams(cam1, cam2)
     box.init_rho(rho, b, n, sp)
     raysums1, raysums2 = box.trace_rays()
     print(raysums1.max(), raysums2.max())
-    plt.imsave('raysums1.png', raysums1.reshape((h,w)), cmap='gray') 
-    plt.imsave('raysums2.png', raysums2.reshape((h,w)), cmap='gray') 
+    plt.imsave('raysums1.png', raysums1.reshape((h,w)), cmap='gray')
+    plt.imsave('raysums2.png', raysums2.reshape((h,w)), cmap='gray')
 
 def test_trace_rays_pycuda():
     import math
