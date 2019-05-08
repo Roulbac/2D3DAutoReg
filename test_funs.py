@@ -1,3 +1,32 @@
+def test_box_class():
+    import numpy as np
+    from camera import Camera
+    from box import Box
+    import matplotlib.pyplot as plt
+    m = np.array([[1, 0, 0,  2],
+                  [0, 0, -1, 1],
+                  [0, 1, 0,  -4],
+                  [0, 0, 0,  1]])
+    h = np.int32(768)
+    w = np.int32(768)
+    src = np.array([-2, 4, 1], dtype=np.float32)
+    b = np.array([-3, -2, 0], dtype=np.float32)
+    n = np.array([3, 3, 3], dtype=np.int32)
+    sp = np.array([1, 1, 1], dtype=np.float32)
+    k = np.array([[2*(h/2), 0,       1*(h/2), 0],
+                  [0,       2*(w/2), 1*(w/2), 0],
+                  [0,       0,       1,       0]])
+    rho = np.ones((n-1).tolist(), dtype=np.float32)
+    cam1 = Camera(m, k, h=h, w=w)
+    cam2 = Camera(m, k, h=h, w=w)
+    box = Box('cpu')
+    box.init_cams(cam1, cam2)
+    box.init_rho(rho, b, n, sp)
+    raysums1, raysums2 = box.trace_rays()
+    print(raysums1.max(), raysums2.max())
+    plt.imsave('raysums1.png', raysums1.reshape((h,w)), cmap='gray') 
+    plt.imsave('raysums2.png', raysums2.reshape((h,w)), cmap='gray') 
+
 def test_trace_rays_pycuda():
     import math
     import pycuda.autoinit

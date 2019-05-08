@@ -20,8 +20,18 @@ class Camera(object):
         self.h, self.w = h, w
         k, m = np.asarray(k), np.asarray(m)
         self.m, self.k = m, k
-        self.minv, self.kinv = np.linalg.pinv(m), np.linalg.pinv(k)
-        self.z_sign = int(np.sign(m[2, 3]))
+
+    @property
+    def z_sign(self):
+        return np.int32(np.sign(self.m[2, 3]))
+
+    @property
+    def minv(self):
+        return np.linalg.pinv(self.m)
+
+    @property
+    def kinv(self):
+        return np.linalg.pinv(self.k)
 
     @property
     def r(self):
