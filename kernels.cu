@@ -24,7 +24,7 @@ __global__ void backprojectPixel(
     else if (localId < 21){
         sMinv[localId - 9] = minv[localId - 9];
     }
-    __syncthreads()
+    __syncthreads();
 
     int i = threadId / w;
     int j = threadId - i*w;
@@ -125,7 +125,7 @@ __global__ void traceRay(
         getAlphas(sB[2], sSp[2], sSrc[2], dst.z, sN[2], azmin, azmax);
         float amin = fmaxf(axmin, fmaxf(aymin, azmin));
         float amax = fminf(axmax, fminf(aymax, azmax));
-        if(amin > amax | | (amin < 0)){
+        if(amin > amax || (amin < 0)){
             raysums[threadId] = 1;
             return;
         }
@@ -133,9 +133,9 @@ __global__ void traceRay(
             float3 pt = make_float3(sSrc[0] + amin*(dst.x - sSrc[0]),
                                     sSrc[1] + amin*(dst.y - sSrc[1]),
                                     sSrc[2] + amin*(dst.z - sSrc[2]));
-            if(((pt.x > (sB[0] + (sN[0]-1)*sSp[0])) | | (pt.x < sB[0])) | |
-                ((pt.y > (sB[1] + (sN[1]-1)*sSp[1])) | | (pt.y < sB[1])) | |
-                ((pt.z > (sB[2] + (sN[2]-1)*sSp[2])) | | (pt.z < sB[2]))) {
+            if(((pt.x > (sB[0] + (sN[0]-1)*sSp[0])) || (pt.x < sB[0])) ||
+                ((pt.y > (sB[1] + (sN[1]-1)*sSp[1])) || (pt.y < sB[1])) ||
+                ((pt.z > (sB[2] + (sN[2]-1)*sSp[2])) || (pt.z < sB[2]))) {
                 raysums[threadId] = 1;
                 return;
             }
@@ -152,9 +152,9 @@ __global__ void traceRay(
             int i = getIJK(sSrc[0], dst.x, minAxyz, amin, sB[0], sSp[0]);
             int j = getIJK(sSrc[1], dst.y, minAxyz, amin, sB[1], sSp[1]);
             int k = getIJK(sSrc[2], dst.z, minAxyz, amin, sB[2], sSp[2]);
-            while((-1 < i & & i < (sN[0]-1)) & &
-                  (-1 < j & & j < (sN[1]-1)) & &
-                  (-1 < k & & k < (sN[2]-1))){
+            while((-1 < i && i < (sN[0]-1)) &&
+                  (-1 < j && j < (sN[1]-1)) &&
+                  (-1 < k && k < (sN[2]-1))){
                 float mu = ((MU_WATER-MU_AIR)/1000*rho[i + j*(sN[0]-1) + k*(sN[0]-1)*(sN[1]-1)] + MU_WATER);
                 if(ax == minAxyz){
                     d12 = d12 + (ax - ac)*dconv*mu;

@@ -19,7 +19,7 @@ def test_box_class():
     rho = np.ones((n-1).tolist(), dtype=np.float32)
     cam1 = Camera(m, k, h=h, w=w)
     cam2 = Camera(m, k, h=h, w=w)
-    box = Box('cpu')
+    box = Box('gpu')
     box.init_cams(cam1, cam2)
     box.init_rho(rho, b, n, sp)
     raysums1, raysums2 = box.trace_rays()

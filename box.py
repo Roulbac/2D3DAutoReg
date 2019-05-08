@@ -117,9 +117,7 @@ class Box(object):
                 source_str = f.read()
             self.cumod = SourceModule(source_str)
             self.f_backproj = self.cumod.get_function('backprojectPixel')
-            self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
             self.f_trace = self.cumod.get_function('traceRay')
-            self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
 
     def init_cams(self, cam1, cam2):
         if self.mode == 'gpu':
@@ -206,14 +204,14 @@ class Box(object):
 
     def _cu_init_rho(self, rho, b, n, sp):
         # Allocate and copy AABB data
-        d_rho = cuda.mem_alloc(rho.nbytes)
-        d_b = cuda.mem_alloc(b.nbytes)
-        d_n = cuda.mem_alloc(n.nbytes)
-        d_sp = cuda.mem_alloc(sp.n_bytes)
-        cuda.memcpy_htod(d_rho, rho)
-        cuda.memcpy_htod(d_b, b)
-        cuda.memcpy_htod(d_n, n)
-        cuda.memcpy_htod(d_sp, sp)
+        d_rho = cuda.mem_alloc(rho.size*np.nbytes[np.float32])
+        d_b = cuda.mem_alloc(b.size*np.nbytes[np.float32])
+        d_n = cuda.mem_alloc(n.size*np.nbytes[np.int32])
+        d_sp = cuda.mem_alloc(sp.size*np.nbytes[np.float32])
+        cuda.memcpy_htod(d_rho, rho.astype(np.float32))
+        cuda.memcpy_htod(d_b, b.astype(np.float32))
+        cuda.memcpy_htod(d_n, n.astype(np.int32))
+        cuda.memcpy_htod(d_sp, sp.astype(np.float32))
         self.d_rho = d_rho
         self.d_b = d_b
         self.d_n = d_n
@@ -221,37 +219,35 @@ class Box(object):
 
     def _cu_init_cams(self, cam1, cam2):
         # Allocate camera data
-        self.d_kinv1 = cuda.mem_alloc(cam1.kinv.nbytes)
-        self.d_kinv2 = cuda.mem_alloc(cam2.kinv.nbytes)
-        self.d_minv1 = cuda.mem_alloc(cam1.minv.nbytes)
-        self.d_minv2 = cuda.mem_alloc(cam2.minv.nbytes)
-        self.d_src1 = cuda.mem_alloc(cam1.pos.nbytes)
-        self.d_src2 = cuda.mem_alloc(cam2.pos.nbytes)
-        self.d_dsts1 = cuda.mem_alloc(cam1.h*cam1.w*3*np.nbytes[np.float32])
-        self.d_dsts2 = cuda.mem_alloc(cam2.h*cam2.w*3*np.nbytes[np.float32])
-        self.d_raysums1 = cuda.mem_alloc(cam1.h*cam1.w*np.nbytes[np.float32])
-        self.d_raysums2 = cuda.mem_alloc(cam2.h*cam2.w*np.nbytes[np.float32])
+        h1, w1 = np.int32(cam1.h), np.int32(cam1.w)
+        h2, w2 = np.int32(cam2.h), np.int32(cam2.w)
+        self.h1, self.w1 = h1, w1
+        self.h2, self.w2 = h2, w2
+        self.d_kinv1 = cuda.mem_alloc(cam1.kinv.size * np.nbytes[np.float32])
+        self.d_kinv2 = cuda.mem_alloc(cam2.kinv.size * np.nbytes[np.float32])
+        self.d_minv1 = cuda.mem_alloc(cam1.minv.size * np.nbytes[np.float32])
+        self.d_minv2 = cuda.mem_alloc(cam2.minv.size * np.nbytes[np.float32])
+        self.d_src1 = cuda.mem_alloc(cam1.pos.size * np.nbytes[np.float32])
+        self.d_src2 = cuda.mem_alloc(cam2.pos.size * np.nbytes[np.float32])
+        self.d_dsts1 = cuda.mem_alloc(int(h1*w1*3*np.nbytes[np.float32]))
+        self.d_dsts2 = cuda.mem_alloc(int(h2*w2*3*np.nbytes[np.float32]))
+        self.d_raysums1 = cuda.mem_alloc(int(h1*w1*3*np.nbytes[np.float32]))
+        self.d_raysums2 = cuda.mem_alloc(int(h2*w2*3*np.nbytes[np.float32]))
         # Copy Ks to device
-        cuda.memcpy_htod(self.d_kinv1, cam1.kinv.flatten())
-        cuda.memcpy_htod(self.d_kinv2, cam2.kinv.flatten())
+        cuda.memcpy_htod(self.d_kinv1, cam1.kinv.flatten().astype(np.float32))
+        cuda.memcpy_htod(self.d_kinv2, cam2.kinv.flatten().astype(np.float32))
         # Save device pointers and constants to object
-        self.d_kinv1, self.d_minv1, self.d_src1 = d_kinv1, d_minv1, d_src1
-        self.d_kinv2, self.d_minv2, self.d_src2 = d_kinv2, d_minv2, d_src2
         self.cam1, self.cam2 = cam1, cam2
-        self.h1 = np.array(cam1.h, dtype=np.int32)
-        self.w1 = np.array(cam1.w, dtype=np.int32)
-        self.h2 = np.array(cam2.h, dtype=np.int32)
-        self.w2 = np.array(cam2.w, dtype=np.int32)
 
     def _cu_trace_rays(self):
         # Copy position and projection camera
-        cuda.memcpy_htod(self.d_src1, self.cam1.pos)
-        cuda.memcpy_htod(self.d_src2, self.cam2.pos)
-        cuda.memcpy_htod(self.d_minv1, self.cam1.minv.flatten())
-        cuda.memcpy_htod(self.d_minv2, self.cam2.minv.flatten())
+        cuda.memcpy_htod(self.d_src1, self.cam1.pos.astype(np.float32))
+        cuda.memcpy_htod(self.d_src2, self.cam2.pos.astype(np.float32))
+        cuda.memcpy_htod(self.d_minv1, self.cam1.minv.flatten().astype(np.float32))
+        cuda.memcpy_htod(self.d_minv2, self.cam2.minv.flatten().astype(np.float32))
         # Init scalar parameters and cuda funs
         h1, w1 = self.h1, self.w1
-        h2, w1 = self.h2, self.w2
+        h2, w2 = self.h2, self.w2
         z_sign1, z_sign2 = np.int32(
             self.cam1.z_sign), np.int32(self.cam2.z_sign)
         raysums1 = np.zeros(h1*w1, dtype=np.float32)
@@ -260,22 +256,26 @@ class Box(object):
         grid1 = (math.ceil(h1/block[0]), math.ceil(w1/block[1]))
         grid2 = (math.ceil(h2/block[0]), math.ceil(w2/block[1]))
         # Backproject rays
+        self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
         self.f_backproj.prepared_call(
             grid1, block, h1, w1, self.d_dsts1,
             self.d_minv1, self.d_kinv1, z_sign1
         )
+        self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
         self.f_backproj.prepared_call(
             grid2, block, h2, w2, self.d_dsts2,
             self.d_minv2, self.d_kinv2, z_sign2
         )
         # Do ray tracing
+        self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
         self.f_trace.prepared_call(
             grid1, block, self.d_src1, self.d_dsts1, self.d_raysums1,
-            self.d_rho, self.d_b, self.d_sp, h1, w1
+            self.d_rho, self.d_b, self.d_sp, self.d_n, h1, w1
         )
+        self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
         self.f_trace.prepared_call(
-            grid2, block, self.d_src2, self.d_dsts2, self.d_raysums1,
-            self.d_rho, self.d_b, self.d_sp, h1, w1
+            grid2, block, self.d_src2, self.d_dsts2, self.d_raysums2,
+            self.d_rho, self.d_b, self.d_sp, self.d_n, h1, w1
         )
         # Copy back to host arrays
         cuda.memcpy_dtoh(raysums1, self.d_raysums1)
