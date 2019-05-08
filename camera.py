@@ -1,6 +1,8 @@
+import math
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from numba import cuda
 import numpy as np
 from ray import Ray
 import utils
@@ -19,7 +21,7 @@ class Camera(object):
         k, m = np.asarray(k), np.asarray(m)
         self.m, self.k = m, k
         self.minv, self.kinv = np.linalg.pinv(m), np.linalg.pinv(k)
-        self.z_sign = np.sign(m[2, 3])
+        self.z_sign = int(np.sign(m[2, 3]))
 
     @property
     def r(self):
@@ -93,10 +95,33 @@ class Camera(object):
         x = self.kinv.dot(x + [1]) + [0, 0, 0, 1]
         return self.minv.dot(x)[:3]
 
+    @cuda.jit
+    def backproject_pixel(h, w, dsts, minv, kinv, z_sign):
+        i, j = cuda.grid(2)
+        if i < h and j < w:
+            dotx = z_sign*(kinv[0, 0]*i + kinv[0, 1]*j + kinv[0, 2]*1)
+            doty = z_sign*(kinv[1, 0]*i + kinv[1, 1]*j + kinv[1, 2]*1)
+            dotz = z_sign*(kinv[2, 0]*i + kinv[2, 1]*j + kinv[2, 2]*1)
+            dsts[i, j, 0] = minv[0, 0]*dotx + minv[0, 1]*doty + minv[0, 2]*dotz + minv[0, 3]*1
+            dsts[i, j, 1] = minv[1, 0]*dotx + minv[1, 1]*doty + minv[1, 2]*dotz + minv[1, 3]*1
+            dsts[i, j, 2] = minv[2, 0]*dotx + minv[2, 1]*doty + minv[2, 2]*dotz + minv[2, 3]*1
+
+    def backproject_pixels(self):
+        d_pos = cuda.to_device(self.pos)
+        d_dsts = cuda.device_array((self.h, self.w, 3))
+        d_minv = cuda.to_device(self.minv)
+        d_kinv = cuda.to_device(self.kinv)
+        threadsperblock = (32, 32)
+        blockspergrid = (math.ceil(self.h/32), math.ceil(self.w/32))
+        Camera.backproject_pixel[blockspergrid, threadsperblock](
+            self.h, self.w, d_dsts, d_minv, d_kinv, self.z_sign
+        )
+        return self.h, self.w, d_pos, d_dsts, blockspergrid, threadsperblock
+
     def get_scene_ray(self, x):
         src = self.pos
         dest = self.minv.dot(
-            self.kinv.dot(x + [self.z_sign]) + [0, 0, 0, 1]
+            self.z_sign*self.kinv.dot(x + [1]) + [0, 0, 0, 1]
         )[:3]
         return Ray(src, dest)
 
