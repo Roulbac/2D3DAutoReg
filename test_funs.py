@@ -6,7 +6,7 @@ def test_trace_rays_pycuda():
     import numpy as np
     import matplotlib.pyplot as plt
     # Define data
-    with open('cuda_funs.cu', 'r') as f:
+    with open('kernels.cu', 'r') as f:
         cuda_src = f.read()
     mod = SourceModule(cuda_src)
     m = np.array([[1, 0, 0,  2],

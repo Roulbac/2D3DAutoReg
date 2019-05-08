@@ -123,7 +123,7 @@ __global__ void traceRay(
         getAlphas(sB[2], sSp[2], sSrc[2], dst.z, sN[2], azmin, azmax);
         float amin = fmaxf(axmin, fmaxf(aymin, azmin));
         float amax = fminf(axmax, fminf(aymax, azmax));
-        if(amin > amax || (amin < 0 || amin == 0)){
+        if(amin > amax || (amin < 0)){
             raysums[threadId] = 0;
             return;
         }   
