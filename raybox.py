@@ -16,7 +16,7 @@ MIN_FLOAT32 = -3.4028e+038
 EPS_FLOAT32 = 2.22045e-016
 
 
-class Box(object):
+class RayBox(object):
 
     def __init__(self, mode='cpu'):
         self.mode = mode
@@ -64,7 +64,7 @@ class Box(object):
                 (cam.h, cam.w, cam.minv.flatten(),
                  cam.kinv.flatten(), cam.pos, cam.z_sign))
         # Args is a list of tuples for each cam
-        return Box._jit_trace_rays(self.n, self.sp, self.b, self.rho, camargs)
+        return RayBox._jit_trace_rays(self.n, self.sp, self.b, self.rho, camargs)
 
     def _cpu_init_cams(self, *cams):
         for cam in cams:

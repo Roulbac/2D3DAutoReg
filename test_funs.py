@@ -1,7 +1,7 @@
-def test_box_class():
+def test_raybox_class():
     import numpy as np
     from camera import Camera
-    from box import Box
+    from raybox import RayBox
     import matplotlib.pyplot as plt
     m = np.array([[1, 0, 0,  2],
                   [0, 0, -1, 1],
@@ -19,10 +19,10 @@ def test_box_class():
     rho = np.ones((n-1).tolist(), dtype=np.float32)
     cam1 = Camera(m, k, h=h, w=w)
     cam2 = Camera(m, k, h=h, w=w)
-    box = Box('gpu')
-    box.init_cams(cam1, cam2)
-    box.init_rho(rho, b, n, sp)
-    raysums1, raysums2 = box.trace_rays()
+    raybox = RayBox('gpu')
+    raybox.init_cams(cam1, cam2)
+    raybox.init_rho(rho, b, n, sp)
+    raysums1, raysums2 = raybox.trace_rays()
     print(raysums1.max(), raysums2.max())
     plt.imsave('raysums1.png', raysums1, cmap='gray')
 
@@ -95,7 +95,7 @@ def test_trace_rays_pycuda():
 
 def test_trace_rays():
     from camera import Camera
-    from box import Box
+    from raybox import RayBox
     import numpy as np
     import matplotlib.pyplot as plt
     m = np.array([[1, 0, 0,  2],
@@ -112,13 +112,13 @@ def test_trace_rays():
     ns = [3, 3, 3]
     spacing = [1, 1, 1]
     rho = np.ones((ns[0] - 1, ns[1] - 1, ns[2] - 1))
-    image = Box.trace_rays(bs, ns, spacing, rho, cam)
+    image = RayBox.trace_rays(bs, ns, spacing, rho, cam)
     image = (image - image.min())/(image.max() - image.min())
 
 
 def test_get_radiological_path():
     import numpy as np
-    from box import Box
+    from raybox import RayBox
     from ray import Ray
     c = np.array([-3, -2, 0])
     i = np.array([0, 4, 0])
@@ -145,7 +145,7 @@ def test_get_radiological_path():
     rql = Ray(q, l)
     ril = Ray(i, l)
     rml = Ray(m, l)
-    box = Box(c, [3, 3, 3], [1, 1, 1])
+    raybox = RayBox(c, [3, 3, 3], [1, 1, 1])
     alphas_rij = (1.0, 1.5, 0.5, 1.5, 1.0, 1.5, 0.0, 2.0)
     alphas_rkl = (1.0, 1.5, 1.0, 1.5, -0.0, 2.0, 0.0, 2.0)
     alphas_rmj = (1.0, 1.5, float("-inf"), float("inf"),
@@ -156,40 +156,40 @@ def test_get_radiological_path():
     np.testing.assert_almost_equal(k + (alphas_rkl[0])*(l-k), l)
     np.testing.assert_almost_equal(k + (alphas_rkl[1])*(l-k), n)
     np.testing.assert_almost_equal(
-        box.get_radiological_path(alphas_rkl, rkl), ln, decimal=2)
+        raybox.get_radiological_path(alphas_rkl, rkl), ln, decimal=2)
     print('Test 1 OK')
     np.testing.assert_almost_equal(i + (alphas_rij[0])*(j-i), j)
     np.testing.assert_almost_equal(i + (alphas_rij[1])*(j-i), o)
     np.testing.assert_almost_equal(
-        box.get_radiological_path(alphas_rij, rij), jo, decimal=2)
+        raybox.get_radiological_path(alphas_rij, rij), jo, decimal=2)
     print('Test 2 OK')
     np.testing.assert_almost_equal(m + (alphas_rmj[0])*(j-m), j)
     np.testing.assert_almost_equal(m + (alphas_rmj[1])*(j-m), p)
     np.testing.assert_almost_equal(
-        box.get_radiological_path(alphas_rmj, rmj), jp, decimal=2)
+        raybox.get_radiological_path(alphas_rmj, rmj), jp, decimal=2)
     print('Test 3 OK')
     np.testing.assert_almost_equal(q + (alphas_rql[0])*(l-q), l)
     np.testing.assert_almost_equal(q + (alphas_rql[1])*(l-q), r)
     np.testing.assert_almost_equal(
-        box.get_radiological_path(alphas_rql, rql), lr, decimal=2)
+        raybox.get_radiological_path(alphas_rql, rql), lr, decimal=2)
     print('Test 4 OK')
     np.testing.assert_almost_equal(i + (alphas_ril[0])*(l-i), l)
     np.testing.assert_almost_equal(i + (alphas_ril[1])*(l-i), s)
     np.testing.assert_almost_equal(
-        box.get_radiological_path(alphas_ril, ril), sl, decimal=2)
+        raybox.get_radiological_path(alphas_ril, ril), sl, decimal=2)
     print('Test 5 OK')
     np.testing.assert_almost_equal(m + (alphas_rml[0])*(l-m), t)
     np.testing.assert_almost_equal(m + (alphas_rml[1])*(l-m), l)
     np.testing.assert_almost_equal(
-        box.get_radiological_path(alphas_rml, rml), tl, decimal=2)
+        raybox.get_radiological_path(alphas_rml, rml), tl, decimal=2)
     print('Test 6 OK')
 
 
 def test_ray_minmax_intersec():
     import numpy as np
-    from box import Box
+    from raybox import RayBox
     from ray import Ray
-    box = Box([2, 0, 0], [3, 3, 3], [1, 1, 1])
+    raybox = RayBox([2, 0, 0], [3, 3, 3], [1, 1, 1])
     i = np.array([0, -4, 0])
     j = np.array([3, 0, 1])
     k = np.array([4, 4/3, 4/3])
@@ -199,68 +199,68 @@ def test_ray_minmax_intersec():
     o = np.array([1, 0, 0])
     # Test 1
     ray = Ray(i, j)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     np.testing.assert_almost_equal(pt1, j)
     np.testing.assert_almost_equal(pt2, k)
     print('Test 1 OK')
     # Test 2
     ray = Ray(l, j)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     np.testing.assert_almost_equal(pt1, j)
     np.testing.assert_almost_equal(pt2, m)
     print('Test 2 OK')
     # Test 3
     ray = Ray(l, n)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 3 OK')
     # Test 4
     ray = Ray(l, o)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 4 OK')
     # Test 5
     ray = Ray(i, n)
-    pt1, _pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, _pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 5 OK')
     # Test 6
     ray = Ray(i, o)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 6 OK')
     # Non unit spacing
-    box = Box([2, 0, 0], [5, 5, 5], [0.5, 0.5, 0.5])
+    raybox = RayBox([2, 0, 0], [5, 5, 5], [0.5, 0.5, 0.5])
     # Test 7
     ray = Ray(i, j)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     np.testing.assert_almost_equal(pt1, j)
     np.testing.assert_almost_equal(pt2, k)
     print('Test 7 OK')
     # Test 8
     ray = Ray(l, j)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     np.testing.assert_almost_equal(pt1, j)
     np.testing.assert_almost_equal(pt2, m)
     print('Test 8 OK')
     # Test 9
     ray = Ray(l, n)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 9 OK')
     # Test 10
     ray = Ray(l, o)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 10 OK')
     # Test 11
     ray = Ray(i, n)
-    pt1, _pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, _pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 11 OK')
     # Test 12
     ray = Ray(i, o)
-    pt1, pt2 = box.get_ray_minmax_intersec(ray)
+    pt1, pt2 = raybox.get_ray_minmax_intersec(ray)
     assert pt1 is None and pt2 is None
     print('Test 12 OK')
 
