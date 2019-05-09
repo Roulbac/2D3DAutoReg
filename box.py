@@ -42,9 +42,12 @@ class Box(object):
 
     def trace_rays(self):
         if self.mode == 'gpu':
-            return self._cu_trace_rays()
+            raysums1, raysums2 = self._cu_trace_rays()
         else:
-            return self._cpu_trace_rays()
+            raysums1, raysums2 = self._cpu_trace_rays()
+        raysums1 = raysums1.reshape((self.cam1.h, self.cam1.w), order='F')
+        raysums2 = raysums2.reshape((self.cam2.h, self.cam2.w), order='F')
+        return raysums1, raysums2
 
     # -------------------- PRIVATE CPU FUNCTIONS ----------------------
 
@@ -71,24 +74,24 @@ class Box(object):
 
     @jit(nopython=True)
     def _jit_trace_rays(h1, w1,
-                         h2, w2,
-                         pos1, pos2,
-                         minv1, minv2,
-                         kinv1, kinv2,
-                         sp, n, b, rho,
-                         z_sign1, z_sign2):
+                        h2, w2,
+                        pos1, pos2,
+                        minv1, minv2,
+                        kinv1, kinv2,
+                        sp, n, b, rho,
+                        z_sign1, z_sign2):
         dsts1 = np.zeros(h1*w1*3, dtype=np.float32)
         dsts2 = np.zeros(h2*w2*3, dtype=np.float32)
         raysums1 = np.zeros(h1*w1, dtype=np.float32)
         raysums2 = np.zeros(h2*w2, dtype=np.float32)
         for idx1 in range(h1*w1):
-            i1, j1 = idx1 // w1, idx1 % w1
+            i1, j1 = idx1 // h1, idx1 % h1
             dsts1[3*idx1:3*idx1+3] = _cpu_backproject_pixel(
                 h1, w1, minv1, kinv1,
                 z_sign1, i1, j1
             )
         for idx2 in range(h2*w2):
-            i2, j2 = idx2 // w2, idx2 % w2
+            i2, j2 = idx2 // h2, idx2 % h2
             dsts2[3*idx2:3*idx2+3] = _cpu_backproject_pixel(
                 h2, w2, minv2, kinv2,
                 z_sign2, i2, j2
@@ -107,7 +110,7 @@ class Box(object):
                 n[0], n[1], n[2], b[0], b[1], b[2],
                 sp[0], sp[1], sp[2], rho
             )
-        return raysums1.reshape((h1, w1)), raysums2.reshape((h2, w2))
+        return raysums1, raysums2
 
     # -------------------- PRIVATE CUDA FUNCTIONS ----------------------
 
@@ -152,8 +155,10 @@ class Box(object):
         # Copy position and projection camera
         cuda.memcpy_htod(self.d_src1, self.cam1.pos.astype(np.float32))
         cuda.memcpy_htod(self.d_src2, self.cam2.pos.astype(np.float32))
-        cuda.memcpy_htod(self.d_minv1, self.cam1.minv.flatten().astype(np.float32))
-        cuda.memcpy_htod(self.d_minv2, self.cam2.minv.flatten().astype(np.float32))
+        cuda.memcpy_htod(
+            self.d_minv1, self.cam1.minv.flatten().astype(np.float32))
+        cuda.memcpy_htod(
+            self.d_minv2, self.cam2.minv.flatten().astype(np.float32))
         # Init scalar parameters and cuda funs
         h1, w1 = self.h1, self.w1
         h2, w2 = self.h2, self.w2
@@ -189,9 +194,9 @@ class Box(object):
         # Copy back to host arrays
         cuda.memcpy_dtoh(raysums1, self.d_raysums1)
         cuda.memcpy_dtoh(raysums2, self.d_raysums2)
-        return raysums1.reshape((h1, w1)), raysums2.reshape((h2, w2))
+        return raysums1, raysums2
 
-#------------------------JITTED CPU FUNCTIONS-----------------------
+# ------------------------JITTED CPU FUNCTIONS-----------------------
 # These cannot be class-scoped
 
 
@@ -204,6 +209,7 @@ def _cpu_backproject_pixel(h, w, minv, kinv, z_sign, i, j):
     dsty = minv[5]*dotx + minv[5]*doty + minv[6]*dotz + minv[7]*1
     dstz = minv[8]*dotx + minv[9]*doty + minv[10]*dotz + minv[11]*1
     return np.array([dstx, dsty, dstz], dtype=np.float32)
+
 
 @jit(nopython=True)
 def _cpu_trace_ray(srx, sry, srz,
@@ -261,6 +267,7 @@ def _cpu_trace_ray(srx, sry, srz,
             az = az + spz/(abs(dstz - srz))
     return math.exp(-d12)
 
+
 @jit(nopython=True)
 def _get_alphas(b, s, p1, p2, n):
     if abs(p2-p1) < 1e-10:
@@ -270,6 +277,7 @@ def _get_alphas(b, s, p1, p2, n):
     if amin > amax:
         amin, amax = amax, amin
     return amin, amax
+
 
 @jit(nopython=True)
 def _get_ax(p1, p2, n, b, s, axmin, axmax, amin, amax):
@@ -283,4 +291,3 @@ def _get_ax(p1, p2, n, b, s, axmin, axmax, amin, amax):
         imax = math.ceil((p1 + amin*(p2-p1) - b)/s - 1) if amin != axmin else n-2
         a = ((b + imax*s) - p1)/(p2-p1)
     return a
-

@@ -24,8 +24,8 @@ def test_box_class():
     box.init_rho(rho, b, n, sp)
     raysums1, raysums2 = box.trace_rays()
     print(raysums1.max(), raysums2.max())
-    plt.imsave('raysums1.png', raysums1.reshape((h,w)), cmap='gray')
-    plt.imsave('raysums2.png', raysums2.reshape((h,w)), cmap='gray')
+    plt.imshow(raysums1, cmap='gray')
+    plt.show()
 
 def test_trace_rays_pycuda():
     import math
