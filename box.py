@@ -20,19 +20,23 @@ class Box(object):
 
     def __init__(self, mode='cpu'):
         self.mode = mode
+        self.cams = []
+        self.d_cams = []
         if mode == 'gpu':
             assert _IMP_PYCUDA and cuda.Device.count() > 0
             with open('kernels.cu') as f:
                 source_str = f.read()
             self.cumod = SourceModule(source_str)
             self.f_backproj = self.cumod.get_function('backprojectPixel')
+            self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
             self.f_trace = self.cumod.get_function('traceRay')
+            self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
 
-    def init_cams(self, cam1, cam2):
+    def init_cams(self, *cams):
         if self.mode == 'gpu':
-            self._cu_init_cams(cam1, cam2)
+            self._cu_init_cams(*cams)
         else:
-            self._cpu_init_cams(cam1, cam2)
+            self._cpu_init_cams(*cams)
 
     def init_rho(self, rho, b, n, sp):
         if self.mode == 'gpu':
@@ -42,75 +46,56 @@ class Box(object):
 
     def trace_rays(self):
         if self.mode == 'gpu':
-            raysums1, raysums2 = self._cu_trace_rays()
+            all_raysums = self._cu_trace_rays()
+            hws = [(d_cam[1], d_cam[2]) for d_cam in self.d_cams]
         else:
-            raysums1, raysums2 = self._cpu_trace_rays()
-        raysums1 = raysums1.reshape((self.cam1.h, self.cam1.w), order='F')
-        raysums2 = raysums2.reshape((self.cam2.h, self.cam2.w), order='F')
-        return raysums1, raysums2
+            all_raysums = self._cpu_trace_rays()
+            hws = [(cam.h, cam.w) for cam in self.cams]
+        for i in range(len(all_raysums)):
+            all_raysums[i] = all_raysums[i].reshape(hws[i], order='F')
+        return all_raysums
 
     # -------------------- PRIVATE CPU FUNCTIONS ----------------------
 
     def _cpu_trace_rays(self):
-        args = [self.h1, self.w1,
-                self.h2, self.w2,
-                self.cam1.pos, self.cam2.pos,
-                self.minv1, self.minv2,
-                self.kinv1, self.kinv2,
-                self.sp, self.n, self.b, self.rho,
-                self.cam1.z_sign, self.cam2.z_sign]
-        return Box._jit_trace_rays(*args)
+        camargs = []
+        for cam in self.cams:
+            camargs.append(
+                (cam.h, cam.w, cam.minv.flatten(),
+                 cam.kinv.flatten(), cam.pos, cam.z_sign))
+        # Args is a list of tuples for each cam
+        return Box._jit_trace_rays(self.n, self.sp, self.b, self.rho, camargs)
 
-    def _cpu_init_cams(self, cam1, cam2):
-        self.h1, self.w1 = cam1.h, cam1.w
-        self.h2, self.w2 = cam2.h, cam2.w
-        self.kinv1, self.minv1 = cam1.kinv.flatten(), cam1.minv.flatten()
-        self.kinv2, self.minv2 = cam2.kinv.flatten(), cam2.minv.flatten()
-        self.cam1, self.cam2 = cam1, cam2
+    def _cpu_init_cams(self, *cams):
+        for cam in cams:
+            self.cams.append(cam)
 
     def _cpu_init_rho(self, rho, b, n, sp):
         self.rho = rho.flatten()
         self.b, self.n, self.sp = b, n, sp
 
     @jit(nopython=True)
-    def _jit_trace_rays(h1, w1,
-                        h2, w2,
-                        pos1, pos2,
-                        minv1, minv2,
-                        kinv1, kinv2,
-                        sp, n, b, rho,
-                        z_sign1, z_sign2):
-        dsts1 = np.zeros(h1*w1*3, dtype=np.float32)
-        dsts2 = np.zeros(h2*w2*3, dtype=np.float32)
-        raysums1 = np.zeros(h1*w1, dtype=np.float32)
-        raysums2 = np.zeros(h2*w2, dtype=np.float32)
-        for idx1 in range(h1*w1):
-            i1, j1 = idx1 // h1, idx1 % h1
-            dsts1[3*idx1:3*idx1+3] = _cpu_backproject_pixel(
-                h1, w1, minv1, kinv1,
-                z_sign1, i1, j1
-            )
-        for idx2 in range(h2*w2):
-            i2, j2 = idx2 // h2, idx2 % h2
-            dsts2[3*idx2:3*idx2+3] = _cpu_backproject_pixel(
-                h2, w2, minv2, kinv2,
-                z_sign2, i2, j2
-            )
-        for idx1 in range(h1*w1):
-            raysums1[idx1] = _cpu_trace_ray(
-                pos1[0], pos1[1], pos1[2],
-                dsts1[3*idx1], dsts1[3*idx1+1], dsts1[3*idx1+2],
-                n[0], n[1], n[2], b[0], b[1], b[2],
-                sp[0], sp[1], sp[2], rho
-            )
-        for idx2 in range(h2*w2):
-            raysums2[idx2] = _cpu_trace_ray(
-                pos2[0], pos2[1], pos2[2],
-                dsts2[3*idx2], dsts2[3*idx2+1], dsts2[3*idx2+2],
-                n[0], n[1], n[2], b[0], b[1], b[2],
-                sp[0], sp[1], sp[2], rho
-            )
-        return raysums1, raysums2
+    def _jit_trace_rays(n, sp, b, rho, camargs):
+        all_raysums = []
+        for arg in camargs:
+            h, w, minv, kinv, pos, z_sign = arg
+            dsts = np.zeros(h*w*3, dtype=np.float32)
+            raysums = np.zeros(h*w, dtype=np.float32)
+            for idx in range(h*w):
+                i, j = idx // h, idx % h
+                dsts[3*idx:3*idx+3] = _cpu_backproject_pixel(
+                    h, w, minv, kinv,
+                    z_sign, i, j
+                )
+            for idx in range(h*w):
+                raysums[idx] = _cpu_trace_ray(
+                    pos[0], pos[1], pos[2],
+                    dsts[3*idx], dsts[3*idx+1], dsts[3*idx+2],
+                    n[0], n[1], n[2], b[0], b[1], b[2],
+                    sp[0], sp[1], sp[2], rho
+                )
+            all_raysums.append(raysums)
+        return all_raysums
 
     # -------------------- PRIVATE CUDA FUNCTIONS ----------------------
 
@@ -129,72 +114,45 @@ class Box(object):
         self.d_n = d_n
         self.d_sp = d_sp
 
-    def _cu_init_cams(self, cam1, cam2):
+    def _cu_init_cams(self, *cams):
         # Allocate camera data
-        h1, w1 = np.int32(cam1.h), np.int32(cam1.w)
-        h2, w2 = np.int32(cam2.h), np.int32(cam2.w)
-        self.h1, self.w1 = h1, w1
-        self.h2, self.w2 = h2, w2
-        self.d_kinv1 = cuda.mem_alloc(cam1.kinv.size * np.nbytes[np.float32])
-        self.d_kinv2 = cuda.mem_alloc(cam2.kinv.size * np.nbytes[np.float32])
-        self.d_minv1 = cuda.mem_alloc(cam1.minv.size * np.nbytes[np.float32])
-        self.d_minv2 = cuda.mem_alloc(cam2.minv.size * np.nbytes[np.float32])
-        self.d_src1 = cuda.mem_alloc(cam1.pos.size * np.nbytes[np.float32])
-        self.d_src2 = cuda.mem_alloc(cam2.pos.size * np.nbytes[np.float32])
-        self.d_dsts1 = cuda.mem_alloc(int(h1*w1*3*np.nbytes[np.float32]))
-        self.d_dsts2 = cuda.mem_alloc(int(h2*w2*3*np.nbytes[np.float32]))
-        self.d_raysums1 = cuda.mem_alloc(int(h1*w1*3*np.nbytes[np.float32]))
-        self.d_raysums2 = cuda.mem_alloc(int(h2*w2*3*np.nbytes[np.float32]))
-        # Copy Ks to device
-        cuda.memcpy_htod(self.d_kinv1, cam1.kinv.flatten().astype(np.float32))
-        cuda.memcpy_htod(self.d_kinv2, cam2.kinv.flatten().astype(np.float32))
-        # Save device pointers and constants to object
-        self.cam1, self.cam2 = cam1, cam2
+        for cam in cams:
+            # Convert to device variables and allocate if necessary
+            d_h, d_w, d_z_sign = np.int32(cam.h), np.int32(cam.w), np.int32(cam.z_sign)
+            d_kinv = cuda.mem_alloc(cam.kinv.size * np.nbytes[np.float32])
+            d_minv = cuda.mem_alloc(cam.minv.size * np.nbytes[np.float32])
+            d_src = cuda.mem_alloc(cam.pos.size * np.nbytes[np.float32])
+            d_dsts = cuda.mem_alloc(int(cam.h*cam.w*3*np.nbytes[np.float32]))
+            d_raysums = cuda.mem_alloc(int(cam.h*cam.w*np.nbytes[np.float32]))
+            # Copy Kinv to device
+            cuda.memcpy_htod(d_kinv, cam.kinv.flatten().astype(np.float32))
+            # Save pointers to camera and variables
+            self.d_cams.append(
+                (cam, d_h, d_w, d_z_sign, d_kinv,
+                 d_minv, d_src, d_dsts, d_raysums)
+            )
 
     def _cu_trace_rays(self):
-        # Copy position and projection camera
-        cuda.memcpy_htod(self.d_src1, self.cam1.pos.astype(np.float32))
-        cuda.memcpy_htod(self.d_src2, self.cam2.pos.astype(np.float32))
-        cuda.memcpy_htod(
-            self.d_minv1, self.cam1.minv.flatten().astype(np.float32))
-        cuda.memcpy_htod(
-            self.d_minv2, self.cam2.minv.flatten().astype(np.float32))
-        # Init scalar parameters and cuda funs
-        h1, w1 = self.h1, self.w1
-        h2, w2 = self.h2, self.w2
-        z_sign1, z_sign2 = np.int32(
-            self.cam1.z_sign), np.int32(self.cam2.z_sign)
-        raysums1 = np.zeros(h1*w1, dtype=np.float32)
-        raysums2 = np.zeros(h2*w2, dtype=np.float32)
-        block = (16, 16, 1)
-        grid1 = (math.ceil(h1/block[0]), math.ceil(w1/block[1]))
-        grid2 = (math.ceil(h2/block[0]), math.ceil(w2/block[1]))
-        # Backproject rays
-        self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
-        self.f_backproj.prepared_call(
-            grid1, block, h1, w1, self.d_dsts1,
-            self.d_minv1, self.d_kinv1, z_sign1
-        )
-        self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
-        self.f_backproj.prepared_call(
-            grid2, block, h2, w2, self.d_dsts2,
-            self.d_minv2, self.d_kinv2, z_sign2
-        )
-        # Do ray tracing
-        self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
-        self.f_trace.prepared_call(
-            grid1, block, self.d_src1, self.d_dsts1, self.d_raysums1,
-            self.d_rho, self.d_b, self.d_sp, self.d_n, h1, w1
-        )
-        self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
-        self.f_trace.prepared_call(
-            grid2, block, self.d_src2, self.d_dsts2, self.d_raysums2,
-            self.d_rho, self.d_b, self.d_sp, self.d_n, h1, w1
-        )
-        # Copy back to host arrays
-        cuda.memcpy_dtoh(raysums1, self.d_raysums1)
-        cuda.memcpy_dtoh(raysums2, self.d_raysums2)
-        return raysums1, raysums2
+        all_raysums = []
+        for d_cam in self.d_cams:
+            cam, d_h, d_w, d_z_sign, d_kinv, d_minv, d_src, d_dsts, d_raysums = d_cam
+            cuda.memcpy_htod(d_src, cam.pos.astype(np.float32))
+            cuda.memcpy_htod(d_minv, cam.minv.flatten().astype(np.float32))
+            cuda.memcpy_htod(d_kinv, cam.kinv.flatten().astype(np.float32))
+            block = (16, 16, 1)
+            grid = (math.ceil(d_h/block[0]), math.ceil(d_w/block[0]))
+            self.f_backproj.prepared_call(
+                grid, block, d_h, d_w, d_dsts,
+                d_minv, d_kinv, d_z_sign
+            )
+            self.f_trace.prepared_call(
+                grid, block, d_src, d_dsts, d_raysums,
+                self.d_rho, self.d_b, self.d_sp, self.d_n, d_h, d_w
+            )
+            raysums = np.zeros(d_h*d_w, dtype=np.float32)
+            cuda.memcpy_dtoh(raysums, d_raysums)
+            all_raysums.append(raysums)
+        return all_raysums
 
 # ------------------------JITTED CPU FUNCTIONS-----------------------
 # These cannot be class-scoped
