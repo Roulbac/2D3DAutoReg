@@ -3,10 +3,18 @@ def test_raybox_class():
     from camera import Camera
     from raybox import RayBox
     import matplotlib.pyplot as plt
-    m = np.array([[1, 0, 0,  2],
-                  [0, 0, -1, 1],
-                  [0, 1, 0,  -4],
-                  [0, 0, 0,  1]])
+    # m = np.array([[1, 0, 0,  2],
+    #               [0, 0, -1, 1],
+    #               [0, 1, 0,  -4],
+    #               [0, 0, 0,  1]])
+    m = np.array([[0, -1, 0, -1],
+                   [0, 0, -1, 1],
+                   [1, 0, 0, -3],
+                   [0, 0, 0, 1]])
+    # m = np.array([[ 1.        ,  0.        ,  0.        ,  2.        ],
+    #    [ 0.        ,  0.39073113, -0.92050485, -0.64241966],
+    #    [ 0.        ,  0.92050485,  0.39073113, -4.07275054],
+    #    [ 0.        ,  0.        ,  0.        ,  1.        ]])
     h = np.int32(768)
     w = np.int32(768)
     src = np.array([-2, 4, 1], dtype=np.float32)
@@ -19,9 +27,9 @@ def test_raybox_class():
     rho = np.ones((n-1).tolist(), dtype=np.float32)
     cam1 = Camera(m, k, h=h, w=w)
     cam2 = Camera(m, k, h=h, w=w)
-    raybox = RayBox('gpu')
-    raybox.init_cams(cam1, cam2)
-    raybox.init_rho(rho, b, n, sp)
+    raybox = RayBox('cpu')
+    raybox.set_cams(cam1, cam2)
+    raybox.set_rho(rho, b, n, sp)
     raysums1, raysums2 = raybox.trace_rays()
     print(raysums1.max(), raysums2.max())
     plt.imsave('raysums1.png', raysums1, cmap='gray')

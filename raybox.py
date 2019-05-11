@@ -22,6 +22,7 @@ class RayBox(object):
         self.mode = mode
         self.cams = []
         self.d_cams = []
+        self.rho_initialized = False
         if mode == 'gpu':
             assert _IMP_PYCUDA and cuda.Device.count() > 0
             with open('kernels.cu') as f:
@@ -32,17 +33,23 @@ class RayBox(object):
             self.f_trace = self.cumod.get_function('traceRay')
             self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
 
-    def init_cams(self, *cams):
+    def set_cams(self, *cams):
         if self.mode == 'gpu':
-            self._cu_init_cams(*cams)
+            self._cu_set_cams(*cams)
         else:
-            self._cpu_init_cams(*cams)
+            self._cpu_set_cams(*cams)
 
-    def init_rho(self, rho, b, n, sp):
+    def get_cams(self):
         if self.mode == 'gpu':
-            self._cu_init_rho(rho, b, n, sp)
+            return list(map(lambda x: x[0], self.d_cams))
         else:
-            self._cpu_init_rho(rho, b, n, sp)
+            return self.cams
+
+    def set_rho(self, rho, b, n, sp):
+        if self.mode == 'gpu':
+            self._cu_set_rho(rho, b, n, sp)
+        else:
+            self._cpu_set_rho(rho, b, n, sp)
 
     def trace_rays(self):
         if self.mode == 'gpu':
@@ -66,11 +73,10 @@ class RayBox(object):
         # Args is a list of tuples for each cam
         return RayBox._jit_trace_rays(self.n, self.sp, self.b, self.rho, camargs)
 
-    def _cpu_init_cams(self, *cams):
-        for cam in cams:
-            self.cams.append(cam)
+    def _cpu_set_cams(self, *cams):
+        self.cams = cams
 
-    def _cpu_init_rho(self, rho, b, n, sp):
+    def _cpu_set_rho(self, rho, b, n, sp):
         self.rho = rho.flatten()
         self.b, self.n, self.sp = b, n, sp
 
@@ -99,7 +105,7 @@ class RayBox(object):
 
     # -------------------- PRIVATE CUDA FUNCTIONS ----------------------
 
-    def _cu_init_rho(self, rho, b, n, sp):
+    def _cu_set_rho(self, rho, b, n, sp):
         # Allocate and copy AABB data
         d_rho = cuda.mem_alloc(rho.size*np.nbytes[np.float32])
         d_b = cuda.mem_alloc(b.size*np.nbytes[np.float32])
@@ -114,8 +120,9 @@ class RayBox(object):
         self.d_n = d_n
         self.d_sp = d_sp
 
-    def _cu_init_cams(self, *cams):
+    def _cu_set_cams(self, *cams):
         # Allocate camera data
+        d_cams = []
         for cam in cams:
             # Convert to device variables and allocate if necessary
             d_h, d_w, d_z_sign = np.int32(cam.h), np.int32(cam.w), np.int32(cam.z_sign)
@@ -127,10 +134,11 @@ class RayBox(object):
             # Copy Kinv to device
             cuda.memcpy_htod(d_kinv, cam.kinv.flatten().astype(np.float32))
             # Save pointers to camera and variables
-            self.d_cams.append(
+            d_cams.append(
                 (cam, d_h, d_w, d_z_sign, d_kinv,
                  d_minv, d_src, d_dsts, d_raysums)
             )
+        self.d_cams = d_cams
 
     def _cu_trace_rays(self):
         all_raysums = []
@@ -164,7 +172,7 @@ def _cpu_backproject_pixel(h, w, minv, kinv, z_sign, i, j):
     doty = z_sign*(kinv[3]*i + kinv[4]*j + kinv[5]*1)
     dotz = z_sign*(kinv[6]*i + kinv[7]*j + kinv[8]*1)
     dstx = minv[0]*dotx + minv[1]*doty + minv[2]*dotz + minv[3]*1
-    dsty = minv[5]*dotx + minv[5]*doty + minv[6]*dotz + minv[7]*1
+    dsty = minv[4]*dotx + minv[5]*doty + minv[6]*dotz + minv[7]*1
     dstz = minv[8]*dotx + minv[9]*doty + minv[10]*dotz + minv[11]*1
     return np.array([dstx, dsty, dstz], dtype=np.float32)
 
@@ -182,16 +190,16 @@ def _cpu_trace_ray(srx, sry, srz,
     azmin, azmax = _get_alphas(bz, spz, srz, dstz, nz)
     amin, amax = max(axmin, aymin, azmin), min(axmax, aymax, azmax)
     # Check intersection
-    if amin >= amax or amin < 0:
+    if amin > amax or amin < 0:
         return 1
-    else:
-        ptx = srx + amin*(dstx - srx)
-        pty = sry + amin*(dsty - sry)
-        ptz = srz + amin*(dstz - srz)
-        if (ptx > (bx + (nx-1)*spx) or ptx < bx) or \
-           (pty > (by + (ny-1)*spy) or pty < by) or \
-           (ptz > (bz + (nz-1)*spz) or ptz < bz):
-            return 1
+    # else:
+    #     ptx = srx + amin*(dstx - srx)
+    #     pty = sry + amin*(dsty - sry)
+    #     ptz = srz + amin*(dstz - srz)
+    #     if (ptx > (bx + (nx-1)*spx) or ptx < bx) or \
+    #        (pty > (by + (ny-1)*spy) or pty < by) or \
+    #        (ptz > (bz + (nz-1)*spz) or ptz < bz):
+    #         return 1
     # Calculate ijk min/max
     ax = _get_ax(srx, dstx, nx, bx, spx, axmin, axmax, amin, amax)
     ay = _get_ax(sry, dsty, ny, by, spy, aymin, aymax, amin, amax)
@@ -228,7 +236,7 @@ def _cpu_trace_ray(srx, sry, srz,
 
 @jit(nopython=True)
 def _get_alphas(b, s, p1, p2, n):
-    if abs(p2-p1) < 1e-10:
+    if abs(p2-p1) < EPS_FLOAT32:
         amin, amax = MIN_FLOAT32, MAX_FLOAT32
     else:
         amin, amax = (b-p1)/(p2-p1), (b+(n-1)*s-p1)/(p2-p1)
@@ -240,12 +248,12 @@ def _get_alphas(b, s, p1, p2, n):
 @jit(nopython=True)
 def _get_ax(p1, p2, n, b, s, axmin, axmax, amin, amax):
     # IMPORTANT: Replace ceil(x) with floor(x+1) and floor(x) with ceil(x-1)
-    if p1 == p2:
+    if abs(p1 - p2) < EPS_FLOAT32:
         a = MAX_FLOAT32
     elif p1 < p2:
-        imin = math.floor((p1 + amin*(p2-p1) - b)/s + 1) if amin != axmin else 1
+        imin = math.floor((p1 + amin*(p2-p1) - b)/s + 1) if abs(amin-axmin)>EPS_FLOAT32 else 1
         a = ((b + imin*s) - p1)/(p2-p1)
     else:
-        imax = math.ceil((p1 + amin*(p2-p1) - b)/s - 1) if amin != axmin else n-2
+        imax = math.ceil((p1 + amin*(p2-p1) - b)/s - 1) if abs(amin-axmin)>EPS_FLOAT32 else n-2
         a = ((b + imax*s) - p1)/(p2-p1)
     return a

@@ -18,6 +18,29 @@ class Camera(object):
         self.h, self.w = h, w
         k, m = np.asarray(k), np.asarray(m)
         self.m, self.k = m, k
+        self.tfm = np.eye(4)
+
+    def m_from_params(params):
+        t = np.array([params[:3]]).T
+        phi, theta, psi = params[3:]
+        phi, theta, psi = phi*np.pi/180, theta*np.pi/180, psi*np.pi/180
+        rphi = Camera.rot_from_euler(phi, 'phi')
+        rtheta = Camera.rot_from_euler(theta, 'theta')
+        rpsi = Camera.rot_from_euler(psi, 'psi')
+        r = np.dot(rpsi, np.dot(rtheta, rphi))
+        m = np.block([[r,       t],
+                      [0, 0, 0, 1]])
+        return m
+
+    def rot_from_euler(angle, axis):
+        r = np.eye(3)
+        if axis == 'theta':
+            r[1:, 1:] = np.array([[np.cos(angle), np.sin(angle)],
+                                  [-np.sin(angle), np.cos(angle)]])
+        else:
+            r[:2, :2] = np.array([[np.cos(angle), np.sin(angle)],
+                                  [-np.sin(angle), np.cos(angle)]])
+        return r
 
     @property
     def z_sign(self):
@@ -25,7 +48,7 @@ class Camera(object):
 
     @property
     def minv(self):
-        return np.linalg.pinv(self.m)
+        return np.linalg.pinv(np.dot(self.tfm, self.m))
 
     @property
     def kinv(self):
