@@ -38,12 +38,12 @@ class ImageWidget(QtWidgets.QLabel):
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
 
     @staticmethod
-    def np_to_qrgb_pixmap(arr, color, alpha=1):
+    def np_to_qrgb_pixmap(arr, color, alpha=0.5):
         h, w = arr.shape[0], arr.shape[1]
         arr = (255*arr).astype(np.uint8).flatten()
-        qrgb_dict = {'r': lambda x: QtGui.qRgb(x, 0, 0),
-                     'g': lambda x: QtGui.qRgb(0, x, 0),
-                     'b': lambda x: QtGui.qRgb(0, 0, x)}
+        qrgb_dict = {'r': lambda x: QtGui.qRgba(x, 0, 0, int(255*alpha)),
+                     'g': lambda x: QtGui.qRgba(0, x, 0, int(255*alpha)),
+                     'b': lambda x: QtGui.qRgba(0, 0, x, int(255*alpha))}
         colortable = [qrgb_dict[color](i) for i in range(256)]
         img = QtGui.QImage(arr, w, h, w, QtGui.QImage.Format_Indexed8)
         img.setColorTable(colortable)
@@ -51,11 +51,11 @@ class ImageWidget(QtWidgets.QLabel):
 
     def blend_with_base(self, overlay):
         pm = QtGui.QPixmap(overlay.size())
+        pm.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter()
         painter.begin(pm)
-        # Set composition mode
-        #painter.setCompositionMode(QtGui.QPainter.CompositionMode_Destination)
         # Draw overlay
+        painter.drawPixmap(0, 0, self.base)
         painter.drawPixmap(0, 0, overlay)
         painter.end()
         self.setPixmap(pm)
@@ -69,6 +69,7 @@ class ImageWidget(QtWidgets.QLabel):
     def on_alpha(self, alpha):
         if self.drr is not None:
             overlay = ImageWidget.np_to_qrgb_pixmap(self.drr, 'r', alpha)
+            overlay = overlay.scaled(self.base.size(), QtCore.Qt.IgnoreAspectRatio)
             self.setPixmap(self.base)
             self.blend_with_base(overlay)
 
@@ -76,6 +77,7 @@ class ImageWidget(QtWidgets.QLabel):
     def on_drr(self, drr):
         self.drr = drr
         overlay = self.np_to_qrgb_pixmap(drr, 'r', self.alpha)
+        overlay = overlay.scaled(self.base.size(), QtCore.Qt.IgnoreAspectRatio)
         self.blend_with_base(overlay)
 
 class ParametersWidget(QtWidgets.QWidget):
@@ -106,9 +108,12 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.setKeyboardTracking(False)
         self.ty_widg.setKeyboardTracking(False)
         self.tz_widg.setKeyboardTracking(False)
-        self.tx_widg.setRange(-3E-10, 3E10)
-        self.ty_widg.setRange(-3E-10, 3E10)
-        self.tz_widg.setRange(-3E-10, 3E10)
+        self.tx_widg.setRange(-3E10, 3E10)
+        self.ty_widg.setRange(-3E10, 3E10)
+        self.tz_widg.setRange(-3E10, 3E10)
+        self.tx_widg.setSingleStep(0.1)
+        self.ty_widg.setSingleStep(0.1)
+        self.tz_widg.setSingleStep(0.1)
         self.tx_widg.valueChanged.connect(self.on_spinbox_update)
         self.ty_widg.valueChanged.connect(self.on_spinbox_update)
         self.tz_widg.valueChanged.connect(self.on_spinbox_update)
@@ -121,9 +126,13 @@ class ParametersWidget(QtWidgets.QWidget):
         self.phi_widg.setRange(-180, 180)
         self.theta_widg.setRange(-180, 180)
         self.psi_widg.setRange(-180, 180)
+        self.theta_widg.setSingleStep(0.5)
+        self.psi_widg.setSingleStep(0.5)
+        self.phi_widg.setSingleStep(0.5)
         self.phi_widg.valueChanged.connect(self.on_spinbox_update)
         self.theta_widg.valueChanged.connect(self.on_spinbox_update)
         self.psi_widg.valueChanged.connect(self.on_spinbox_update)
+        # Layout
         self.layout = QtWidgets.QGridLayout()
         self.layout.addWidget(self.alpha_slider, 0, 0, 1, 2)
         self.layout.addWidget(self.alpha_label, 0, 2, QtCore.Qt.AlignCenter)
@@ -175,9 +184,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # Menu
         self.menu = QtWidgets.QMenuBar()
         self.file_menu = self.menu.addMenu('File')
-        exit_action = QtWidgets.QAction('Exit', self)
-        exit_action.triggered.connect(self.exit_app)
-        self.file_menu.addAction(exit_action)
         self.fd_in_out = {
             'CT': [self.on_ct_menu, ''],
             'Camera Files': [self.on_cam_menu, ''],
@@ -233,7 +239,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sp = np.array([1, 1, 1], dtype=np.float32)
         rho = np.ones((n - 1).tolist(), dtype=np.float32)
         self.raybox.set_rho(rho, b, n, sp)
-        h, w = 256, 256
+        h, w = 768, 768
         k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
                       [0, 2 * (w / 2), 1 * (w / 2), 0],
                       [0, 0, 1, 0]])
@@ -246,7 +252,7 @@ class MainWindow(QtWidgets.QMainWindow):
                        [1, 0, 0, -3],
                        [0, 0, 0, 1]])
         cam1 = Camera(m=m1, k=k, h=h, w=w)
-        cam2 = Camera(m=m1, k=k, h=h, w=w)
+        cam2 = Camera(m=m2, k=k, h=h, w=w)
         self.raybox.set_cams(cam1, cam2)
         pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
         pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
@@ -343,13 +349,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # TODO
         # Actually read cameras
 
-    @QtCore.Slot()
-    def exit_app(self, checked):
-        sys.exit()
-
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
     window.show()
-    app.exec_()
+    sys.exit(app.exec_())
