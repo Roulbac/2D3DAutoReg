@@ -221,7 +221,9 @@ def _cpu_trace_ray(srx, sry, srz,
     # Go forward in the ray
     while 0 <= i < nx - 1 and 0 <= j < ny - 1 and 0 <= k < nz - 1:
         idx = i + (nx-1)*j + (nx-1)*(ny-1)*k
-        hu = max(rho[idx], threshold)
+        hu = rho[idx]
+        if hu < threshold:
+            return 1
         mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER)
         if ax == min(ax, ay, az):
             d12 = d12 + (ax - ac)*dconv*mu

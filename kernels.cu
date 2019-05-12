@@ -155,7 +155,11 @@ __global__ void traceRay(
             while((-1 < i && i < (sN[0]-1)) &&
                   (-1 < j && j < (sN[1]-1)) &&
                   (-1 < k && k < (sN[2]-1))){
-                float hu = fmaxf(rho[i + j*(sN[0]-1) + k*(sN[0]-1)*(sN[1]-1)], threshold);
+                float hu = rho[i + j*(sN[0]-1) + k*(sN[0]-1)*(sN[1]-1)];
+                if (hu < threshold){
+                    raysums[threadId] = 1;
+                    return;
+                }
                 float mu = ((MU_WATER-MU_AIR)/1000*hu + MU_WATER);
                 if(ax == minAxyz){
                     d12 = d12 + (ax - ac)*dconv*mu;

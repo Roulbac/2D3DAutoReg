@@ -232,6 +232,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.params_widg.refresh_params.connect(self.on_new_params)
         self.params_widg.alpha_slider.valueChanged.connect(self.on_alphaslider_update)
         self.refresh_butn.released.connect(self.params_widg.on_refresh_call)
+        self.threshold_widg.new_threshold.connect(self.on_new_threshold)
         self.alpha.connect(self.img1_widg.on_alpha)
         self.alpha.connect(self.img2_widg.on_alpha)
         self.drr1.connect(self.img1_widg.on_drr)
@@ -239,32 +240,32 @@ class MainWindow(QtWidgets.QMainWindow):
         # Logic
         self.raybox = RayBox('cpu')
         # Debug stuff
-        # b = np.array([-3, -2, 0], dtype=np.float32)
-        # n = np.array([3, 3, 3], dtype=np.int32)
-        # sp = np.array([1, 1, 1], dtype=np.float32)
-        # rho = np.ones((n - 1).tolist(), dtype=np.float32)
-        # self.raybox.set_rho(rho, b, n, sp)
-        # h, w = 768, 768
-        # k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
-        #               [0, 2 * (w / 2), 1 * (w / 2), 0],
-        #               [0, 0, 1, 0]])
-        # m1 = np.array([[1, 0, 0, 2],
-        #                [0, 0, -1, 1],
-        #                [0, 1, 0, -4],
-        #                [0, 0, 0, 1]])
-        # m2 = np.array([[0, -1, 0, -1],
-        #                [0, 0, -1, 1],
-        #                [1, 0, 0, -3],
-        #                [0, 0, 0, 1]])
-        # cam1 = Camera(m=m1, k=k, h=h, w=w)
-        # cam2 = Camera(m=m2, k=k, h=h, w=w)
-        # self.raybox.set_cams(cam1, cam2)
-        # pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
-        # pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
-        # self.img1_widg.base = pm1
-        # self.img2_widg.base = pm2
-        # self.img1_widg.setPixmap(pm1)
-        # self.img2_widg.setPixmap(pm2)
+        b = np.array([-3, -2, 0], dtype=np.float32)
+        n = np.array([3, 3, 3], dtype=np.int32)
+        sp = np.array([1, 1, 1], dtype=np.float32)
+        rho = np.ones((n - 1).tolist(), dtype=np.float32)
+        self.raybox.set_rho(rho, b, n, sp)
+        h, w = 768, 768
+        k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
+                      [0, 2 * (w / 2), 1 * (w / 2), 0],
+                      [0, 0, 1, 0]])
+        m1 = np.array([[1, 0, 0, 2],
+                       [0, 0, -1, 1],
+                       [0, 1, 0, -4],
+                       [0, 0, 0, 1]])
+        m2 = np.array([[0, -1, 0, -1],
+                       [0, 0, -1, 1],
+                       [1, 0, 0, -3],
+                       [0, 0, 0, 1]])
+        cam1 = Camera(m=m1, k=k, h=h, w=w)
+        cam2 = Camera(m=m2, k=k, h=h, w=w)
+        self.raybox.set_cams(cam1, cam2)
+        pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
+        pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
+        self.img1_widg.base = pm1
+        self.img2_widg.base = pm2
+        self.img1_widg.setPixmap(pm1)
+        self.img2_widg.setPixmap(pm2)
 
 
     @QtCore.Slot(list)
@@ -299,8 +300,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot(float)
     def on_new_threshold(self, val):
-        pass
-        # TODO
+        self.raybox.set_threshold(val)
 
     @QtCore.Slot()
     def on_ct_menu(self):
