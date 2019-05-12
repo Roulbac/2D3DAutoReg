@@ -81,7 +81,7 @@ class ImageWidget(QtWidgets.QLabel):
         self.blend_with_base(overlay)
 
 class ParametersWidget(QtWidgets.QWidget):
-    new_params = QtCore.Signal(list)
+    refresh_params = QtCore.Signal(list)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -114,9 +114,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.setSingleStep(0.1)
         self.ty_widg.setSingleStep(0.1)
         self.tz_widg.setSingleStep(0.1)
-        self.tx_widg.valueChanged.connect(self.on_spinbox_update)
-        self.ty_widg.valueChanged.connect(self.on_spinbox_update)
-        self.tz_widg.valueChanged.connect(self.on_spinbox_update)
+        self.tx_widg.valueChanged.connect(self.on_refresh_call)
+        self.ty_widg.valueChanged.connect(self.on_refresh_call)
+        self.tz_widg.valueChanged.connect(self.on_refresh_call)
         self.phi_widg = QtWidgets.QDoubleSpinBox(self)
         self.theta_widg = QtWidgets.QDoubleSpinBox(self)
         self.psi_widg = QtWidgets.QDoubleSpinBox(self)
@@ -129,9 +129,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.theta_widg.setSingleStep(0.5)
         self.psi_widg.setSingleStep(0.5)
         self.phi_widg.setSingleStep(0.5)
-        self.phi_widg.valueChanged.connect(self.on_spinbox_update)
-        self.theta_widg.valueChanged.connect(self.on_spinbox_update)
-        self.psi_widg.valueChanged.connect(self.on_spinbox_update)
+        self.phi_widg.valueChanged.connect(self.on_refresh_call)
+        self.theta_widg.valueChanged.connect(self.on_refresh_call)
+        self.psi_widg.valueChanged.connect(self.on_refresh_call)
         # Layout
         self.layout = QtWidgets.QGridLayout()
         self.layout.addWidget(self.alpha_slider, 0, 0, 1, 2)
@@ -150,16 +150,19 @@ class ParametersWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.psi_widg, 3, 2)
         self.setLayout(self.layout)
 
-    @QtCore.Slot(float)
-    def on_spinbox_update(self, val):
+    @QtCore.Slot()
+    def on_refresh_call(self):
+        params = self.get_params()
+        self.refresh_params.emit(params)
+
+    def get_params(self):
         params = [self.tx_widg.value(),
                   self.ty_widg.value(),
                   self.tz_widg.value(),
                   self.phi_widg.value(),
                   self.theta_widg.value(),
                   self.psi_widg.value()]
-        print(params)
-        self.new_params.emit(params)
+        return params
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -195,10 +198,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.file_menu.addAction(action)
         self.edit_menu = self.menu.addMenu('Edit')
         runoptim_action = QtWidgets.QAction('Run Optimizer', self)
-        #runoptim_action.triggered.connect(self.start_optim)
         self.edit_menu.addAction(runoptim_action)
         popup_3d_action = QtWidgets.QAction('Pop up 3D visualizer', self)
-        #popup_3d_action.triggered.connect(self.popup_3d_viewer)
         self.edit_menu.addAction(popup_3d_action)
         # Status bar
         self.status_bar = self.statusBar()
@@ -209,12 +210,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.params_widg = ParametersWidget(self.central_widg)
         # Threshold widg
         self.threshold_widg = ThresholdWidget(self.central_widg)
+        # Refresh button
+        self.refresh_butn = QtWidgets.QPushButton('Refresh', self)
         # Layout
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.img1_widg, 0, 0)
         layout.addWidget(self.img2_widg, 0, 2)
         layout.addWidget(self.threshold_widg, 0, 1)
-        layout.addWidget(self.params_widg, 1, 0, 1, 3)
+        layout.addWidget(self.params_widg, 1, 0, 1, 2)
+        layout.addWidget(self.refresh_butn, 1, 2)
         layout.setRowStretch(0, 1)
         layout.setColumnStretch(0, 1)
         layout.setColumnStretch(2, 1)
@@ -225,8 +229,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Connect signals and slots
         self.base_pixmap_1.connect(self.img1_widg.on_base_pixmap)
         self.base_pixmap_2.connect(self.img2_widg.on_base_pixmap)
-        self.params_widg.new_params.connect(self.on_new_params)
+        self.params_widg.refresh_params.connect(self.on_new_params)
         self.params_widg.alpha_slider.valueChanged.connect(self.on_alphaslider_update)
+        self.refresh_butn.released.connect(self.params_widg.on_refresh_call)
         self.alpha.connect(self.img1_widg.on_alpha)
         self.alpha.connect(self.img2_widg.on_alpha)
         self.drr1.connect(self.img1_widg.on_drr)
@@ -234,32 +239,32 @@ class MainWindow(QtWidgets.QMainWindow):
         # Logic
         self.raybox = RayBox('cpu')
         # Debug stuff
-        b = np.array([-3, -2, 0], dtype=np.float32)
-        n = np.array([3, 3, 3], dtype=np.int32)
-        sp = np.array([1, 1, 1], dtype=np.float32)
-        rho = np.ones((n - 1).tolist(), dtype=np.float32)
-        self.raybox.set_rho(rho, b, n, sp)
-        h, w = 768, 768
-        k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
-                      [0, 2 * (w / 2), 1 * (w / 2), 0],
-                      [0, 0, 1, 0]])
-        m1 = np.array([[1, 0, 0, 2],
-                       [0, 0, -1, 1],
-                       [0, 1, 0, -4],
-                       [0, 0, 0, 1]])
-        m2 = np.array([[0, -1, 0, -1],
-                       [0, 0, -1, 1],
-                       [1, 0, 0, -3],
-                       [0, 0, 0, 1]])
-        cam1 = Camera(m=m1, k=k, h=h, w=w)
-        cam2 = Camera(m=m2, k=k, h=h, w=w)
-        self.raybox.set_cams(cam1, cam2)
-        pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
-        pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
-        self.img1_widg.base = pm1
-        self.img2_widg.base = pm2
-        self.img1_widg.setPixmap(pm1)
-        self.img2_widg.setPixmap(pm2)
+        # b = np.array([-3, -2, 0], dtype=np.float32)
+        # n = np.array([3, 3, 3], dtype=np.int32)
+        # sp = np.array([1, 1, 1], dtype=np.float32)
+        # rho = np.ones((n - 1).tolist(), dtype=np.float32)
+        # self.raybox.set_rho(rho, b, n, sp)
+        # h, w = 768, 768
+        # k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
+        #               [0, 2 * (w / 2), 1 * (w / 2), 0],
+        #               [0, 0, 1, 0]])
+        # m1 = np.array([[1, 0, 0, 2],
+        #                [0, 0, -1, 1],
+        #                [0, 1, 0, -4],
+        #                [0, 0, 0, 1]])
+        # m2 = np.array([[0, -1, 0, -1],
+        #                [0, 0, -1, 1],
+        #                [1, 0, 0, -3],
+        #                [0, 0, 0, 1]])
+        # cam1 = Camera(m=m1, k=k, h=h, w=w)
+        # cam2 = Camera(m=m2, k=k, h=h, w=w)
+        # self.raybox.set_cams(cam1, cam2)
+        # pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
+        # pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
+        # self.img1_widg.base = pm1
+        # self.img2_widg.base = pm2
+        # self.img1_widg.setPixmap(pm1)
+        # self.img2_widg.setPixmap(pm2)
 
 
     @QtCore.Slot(list)

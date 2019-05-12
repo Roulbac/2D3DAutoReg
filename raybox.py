@@ -23,6 +23,7 @@ class RayBox(object):
         self.cams = []
         self.d_cams = []
         self.rho_initialized = False
+        self.threshold = np.float32(0)
         if mode == 'gpu':
             assert _IMP_PYCUDA and cuda.Device.count() > 0
             with open('kernels.cu') as f:
@@ -31,7 +32,10 @@ class RayBox(object):
             self.f_backproj = self.cumod.get_function('backprojectPixel')
             self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
             self.f_trace = self.cumod.get_function('traceRay')
-            self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i'])
+            self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i', 'f'])
+
+    def set_threshold(self, threshold):
+        self.threshold = np.float32(threshold)
 
     def set_cams(self, *cams):
         if self.mode == 'gpu':
@@ -71,7 +75,9 @@ class RayBox(object):
                 (cam.h, cam.w, cam.minv.flatten(),
                  cam.kinv.flatten(), cam.pos, cam.z_sign))
         # Args is a list of tuples for each cam
-        return RayBox._jit_trace_rays(self.n, self.sp, self.b, self.rho, camargs)
+        return RayBox._jit_trace_rays(
+            self.n, self.sp, self.b,
+            self.rho, self.threshold, camargs)
 
     def _cpu_set_cams(self, *cams):
         self.cams = cams
@@ -81,7 +87,7 @@ class RayBox(object):
         self.b, self.n, self.sp = b, n, sp
 
     @jit(nopython=True)
-    def _jit_trace_rays(n, sp, b, rho, camargs):
+    def _jit_trace_rays(n, sp, b, rho, threshold, camargs):
         all_raysums = []
         for arg in camargs:
             h, w, minv, kinv, pos, z_sign = arg
@@ -98,7 +104,7 @@ class RayBox(object):
                     pos[0], pos[1], pos[2],
                     dsts[3*idx], dsts[3*idx+1], dsts[3*idx+2],
                     n[0], n[1], n[2], b[0], b[1], b[2],
-                    sp[0], sp[1], sp[2], rho
+                    sp[0], sp[1], sp[2], rho, threshold
                 )
             all_raysums.append(raysums)
         return all_raysums
@@ -155,7 +161,7 @@ class RayBox(object):
             )
             self.f_trace.prepared_call(
                 grid, block, d_src, d_dsts, d_raysums,
-                self.d_rho, self.d_b, self.d_sp, self.d_n, d_h, d_w
+                self.d_rho, self.d_b, self.d_sp, self.d_n, d_h, d_w, self.threshold
             )
             raysums = np.zeros(d_h*d_w, dtype=np.float32)
             cuda.memcpy_dtoh(raysums, d_raysums)
@@ -183,7 +189,7 @@ def _cpu_trace_ray(srx, sry, srz,
                    nx, ny, nz,
                    bx, by, bz,
                    spx, spy, spz,
-                   rho):
+                   rho, threshold):
     # Calculate alphas
     axmin, axmax = _get_alphas(bx, spx, srx, dstx, nx)
     aymin, aymax = _get_alphas(by, spy, sry, dsty, ny)
@@ -215,7 +221,8 @@ def _cpu_trace_ray(srx, sry, srz,
     # Go forward in the ray
     while 0 <= i < nx - 1 and 0 <= j < ny - 1 and 0 <= k < nz - 1:
         idx = i + (nx-1)*j + (nx-1)*(ny-1)*k
-        mu = (rho[idx]*(MU_WATER-MU_AIR)/1000 + MU_WATER)
+        hu = max(rho[idx], threshold)
+        mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER)
         if ax == min(ax, ay, az):
             d12 = d12 + (ax - ac)*dconv*mu
             i = i + 1 if srx < dstx else i - 1
@@ -232,7 +239,6 @@ def _cpu_trace_ray(srx, sry, srz,
             ac = az
             az = az + spz/(abs(dstz - srz))
     return math.exp(-d12)
-
 
 @jit(nopython=True)
 def _get_alphas(b, s, p1, p2, n):

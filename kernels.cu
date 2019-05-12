@@ -95,7 +95,7 @@ __device__ float getAx(
 __global__ void traceRay(
     const float * src, const float * dsts, float * raysums,
     const float * rho, const float * b, const float * sp,
-    const int * n, const int h, const int w)
+    const int * n, const int h, const int w, const float threshold)
 {
     int blockId = blockIdx.x + blockIdx.y*gridDim.x;
     int localId = (threadIdx.y*blockDim.x) + threadIdx.x;
@@ -130,15 +130,15 @@ __global__ void traceRay(
             return;
         }
         else {
-            float3 pt = make_float3(sSrc[0] + amin*(dst.x - sSrc[0]),
-                                    sSrc[1] + amin*(dst.y - sSrc[1]),
-                                    sSrc[2] + amin*(dst.z - sSrc[2]));
-            if(((pt.x > (sB[0] + (sN[0]-1)*sSp[0])) || (pt.x < sB[0])) ||
-                ((pt.y > (sB[1] + (sN[1]-1)*sSp[1])) || (pt.y < sB[1])) ||
-                ((pt.z > (sB[2] + (sN[2]-1)*sSp[2])) || (pt.z < sB[2]))) {
-                raysums[threadId] = 1;
-                return;
-            }
+            // float3 pt = make_float3(sSrc[0] + amin*(dst.x - sSrc[0]),
+            //                         sSrc[1] + amin*(dst.y - sSrc[1]),
+            //                         sSrc[2] + amin*(dst.z - sSrc[2]));
+            // if(((pt.x > (sB[0] + (sN[0]-1)*sSp[0])) || (pt.x < sB[0])) ||
+            //     ((pt.y > (sB[1] + (sN[1]-1)*sSp[1])) || (pt.y < sB[1])) ||
+            //     ((pt.z > (sB[2] + (sN[2]-1)*sSp[2])) || (pt.z < sB[2]))) {
+            //     raysums[threadId] = 1;
+            //     return;
+            // }
             float ax = getAx(sSrc[0], dst.x, sN[0], sB[0], sSp[0], axmin, axmax, amin, amax);
             float ay = getAx(sSrc[1], dst.y, sN[1], sB[1], sSp[1], aymin, aymax, amin, amax);
             float az = getAx(sSrc[2], dst.z, sN[2], sB[2], sSp[2], azmin, azmax, amin, amax);
@@ -155,7 +155,8 @@ __global__ void traceRay(
             while((-1 < i && i < (sN[0]-1)) &&
                   (-1 < j && j < (sN[1]-1)) &&
                   (-1 < k && k < (sN[2]-1))){
-                float mu = ((MU_WATER-MU_AIR)/1000*rho[i + j*(sN[0]-1) + k*(sN[0]-1)*(sN[1]-1)] + MU_WATER);
+                float hu = fmaxf(rho[i + j*(sN[0]-1) + k*(sN[0]-1)*(sN[1]-1)], threshold);
+                float mu = ((MU_WATER-MU_AIR)/1000*hu + MU_WATER);
                 if(ax == minAxyz){
                     d12 = d12 + (ax - ac)*dconv*mu;
                     i = (sSrc[0] < dst.x)?(i+1): (i-1);
