@@ -1,6 +1,7 @@
 import math
 import numpy as np
 from numba import jit
+from utils import read_rho, recons_DLT
 try:
     import pycuda.driver as cuda
     import pycuda.autoinit
@@ -23,7 +24,7 @@ class RayBox(object):
         self.cams = []
         self.d_cams = []
         self.rho_initialized = False
-        self.threshold = np.float32(0)
+        self.threshold = np.float32(280)
         if mode == 'gpu':
             assert _IMP_PYCUDA and cuda.Device.count() > 0
             with open('kernels.cu') as f:
@@ -49,6 +50,21 @@ class RayBox(object):
         else:
             return self.cams
 
+    def get_rho_params(self, fpath):
+        rho, n, sp = read_rho(fpath)
+        if self.mode == 'gpu':
+            cam1, cam2 = self.d_cams[0][0], self.d_cams[1][0]
+        else:
+            cam1, cam2 = self.cams[0], self.cams[1]
+        p1, p2 = cam1.p, cam2.p
+        x1, x2 = cam1.k[2, :2], cam2.k[2, :2]
+        y = recons_DLT(x1, x2, p1, p2)
+        b = y - ((n-1)*sp)/2
+        return rho, b, n, sp
+
+    # TODO:
+    # Change setting order of rho and camera
+    # Only set b when cams are set!
     def set_rho(self, rho, b, n, sp):
         if self.mode == 'gpu':
             self._cu_set_rho(rho, b, n, sp)
@@ -63,7 +79,7 @@ class RayBox(object):
             all_raysums = self._cpu_trace_rays()
             hws = [(cam.h, cam.w) for cam in self.cams]
         for i in range(len(all_raysums)):
-            all_raysums[i] = all_raysums[i].reshape(hws[i], order='F')
+            all_raysums[i] = all_raysums[i].reshape(hws[i], order='C')
         return all_raysums
 
     # -------------------- PRIVATE CPU FUNCTIONS ----------------------
@@ -94,7 +110,7 @@ class RayBox(object):
             dsts = np.zeros(h*w*3, dtype=np.float32)
             raysums = np.zeros(h*w, dtype=np.float32)
             for idx in range(h*w):
-                i, j = idx // h, idx % h
+                i, j = idx // w, idx % w
                 dsts[3*idx:3*idx+3] = _cpu_backproject_pixel(
                     h, w, minv, kinv,
                     z_sign, i, j
@@ -174,9 +190,10 @@ class RayBox(object):
 
 @jit(nopython=True)
 def _cpu_backproject_pixel(h, w, minv, kinv, z_sign, i, j):
-    dotx = z_sign*(kinv[0]*i + kinv[1]*j + kinv[2]*1)
-    doty = z_sign*(kinv[3]*i + kinv[4]*j + kinv[5]*1)
-    dotz = z_sign*(kinv[6]*i + kinv[7]*j + kinv[8]*1)
+    SID = 1001
+    dotx = SID*z_sign*(kinv[0]*i + kinv[1]*j + kinv[2]*1)
+    doty = SID*z_sign*(kinv[3]*i + kinv[4]*j + kinv[5]*1)
+    dotz = SID*z_sign*(kinv[6]*i + kinv[7]*j + kinv[8]*1)
     dstx = minv[0]*dotx + minv[1]*doty + minv[2]*dotz + minv[3]*1
     dsty = minv[4]*dotx + minv[5]*doty + minv[6]*dotz + minv[7]*1
     dstz = minv[8]*dotx + minv[9]*doty + minv[10]*dotz + minv[11]*1
@@ -196,7 +213,7 @@ def _cpu_trace_ray(srx, sry, srz,
     azmin, azmax = _get_alphas(bz, spz, srz, dstz, nz)
     amin, amax = max(axmin, aymin, azmin), min(axmax, aymax, azmax)
     # Check intersection
-    if amin > amax or amin < 0:
+    if amin >= amax or amin < 0:
         return 1
     # else:
     #     ptx = srx + amin*(dstx - srx)
@@ -220,11 +237,12 @@ def _cpu_trace_ray(srx, sry, srz,
         (srz + 0.5*(min(ax, ay, az) + amin)*(dstz-srz) - bz)/spz)
     # Go forward in the ray
     while 0 <= i < nx - 1 and 0 <= j < ny - 1 and 0 <= k < nz - 1:
-        idx = i + (nx-1)*j + (nx-1)*(ny-1)*k
+        idx = k + (nz-1)*j + (nz-1)*(ny-1)*i
         hu = rho[idx]
         if hu < threshold:
-            return 1
-        mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER)
+            mu = 0
+        else:
+            mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER)
         if ax == min(ax, ay, az):
             d12 = d12 + (ax - ac)*dconv*mu
             i = i + 1 if srx < dstx else i - 1

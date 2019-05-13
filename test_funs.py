@@ -1,3 +1,38 @@
+def test_drr_sawbones():
+    import numpy as np
+    import SimpleITK as sitk
+    from camera import Camera
+    from raybox import RayBox
+    import matplotlib.pyplot as plt
+    b = np.array([0, 0, 0], dtype=np.float32)
+    h = np.int32(460)
+    w = np.int32(460)
+    m = np.array([[0, 0, -1, 143],
+                   [1,  0, 0, -96],
+                   [0,  -1, 0, -770]])
+    k = np.array([[1001, 0,       204.5, 0],
+                  [0,       1001, 137.3, 0],
+                  [0,       0,        1, 0]])
+    k[0,0], k[1,1] = 1.5*k[0,0], 1.5*k[1,1]
+    # m = np.array([[ 1.        ,  0.        ,  0.        ,  2.        ],
+    #    [ 0.        ,  0.39073113, -0.92050485, -0.64241966],
+    #    [ 0.        ,  0.92050485,  0.39073113, -4.07275054],
+    #    [ 0.        ,  0.        ,  0.        ,  1.        ]])
+    rho = sitk.GetArrayFromImage(sitk.ReadImage('Test_data/Sawbones_L2L3/sawbones.nii.gz')).transpose((1, 2, 0)).astype(np.float32)
+    sp = np.array([0.375, 0.375, 0.625], dtype=np.float32)[[1, 0, 2]]
+    n = np.array([513, 513, 456], dtype=np.int32)[[1, 0, 2]]
+    rho = rho[::, ::-1, ::]
+    #rho = np.ones((512, 512, 455))
+    cam1 = Camera(m, k, h=h, w=w)
+    cam2 = Camera(m, k, h=h, w=w)
+    raybox = RayBox('cpu')
+    raybox.set_cams(cam1, cam2)
+    raybox.set_rho(rho, b, n, sp)
+    raysums1, raysums2 = raybox.trace_rays()
+    print(raysums1.max(), raysums2.max())
+    plt.imsave('raysums1.png', raysums1, cmap='gray', vmin=0, vmax=1)
+
+
 def test_raybox_class():
     import numpy as np
     from camera import Camera
@@ -14,7 +49,7 @@ def test_raybox_class():
     # m = np.array([[ 1.        ,  0.        ,  0.        ,  2.        ],
     #    [ 0.        ,  0.39073113, -0.92050485, -0.64241966],
     #    [ 0.        ,  0.92050485,  0.39073113, -4.07275054],
-    #    [ 0.        ,  0.        ,  0.        ,  1.        ]])
+    #    [ 0.        ,  0.        ,  0.      #  ,  1.        ]])
     h = np.int32(768)
     w = np.int32(768)
     src = np.array([-2, 4, 1], dtype=np.float32)

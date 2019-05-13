@@ -17,6 +17,10 @@ class Camera(object):
     def __init__(self, m=np.eye(4), k=np.eye(3, 4), h=768, w=768):
         self.h, self.w = h, w
         k, m = np.asarray(k), np.asarray(m)
+        if m.shape  == (3,4):
+            m = np.vstack([m, [0, 0, 0, 1]])
+        if k.shape == (3,3):
+            k = np.hstack([k, np.zeros((3,1))])
         self.m, self.k = m, k
         self.tfm = np.eye(4)
 

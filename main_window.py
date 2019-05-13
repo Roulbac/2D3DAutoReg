@@ -1,9 +1,11 @@
 import time
 import sys
+import re
 import numpy as np
 from PySide2 import QtCore, QtGui, QtWidgets
 from raybox import RayBox
 from camera import Camera
+from utils import str_to_mat, recons_DLT, read_rho
 
 
 class ThresholdWidget(QtWidgets.QWidget):
@@ -240,32 +242,32 @@ class MainWindow(QtWidgets.QMainWindow):
         # Logic
         self.raybox = RayBox('cpu')
         # Debug stuff
-        b = np.array([-3, -2, 0], dtype=np.float32)
-        n = np.array([3, 3, 3], dtype=np.int32)
-        sp = np.array([1, 1, 1], dtype=np.float32)
-        rho = np.ones((n - 1).tolist(), dtype=np.float32)
-        self.raybox.set_rho(rho, b, n, sp)
-        h, w = 768, 768
-        k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
-                      [0, 2 * (w / 2), 1 * (w / 2), 0],
-                      [0, 0, 1, 0]])
-        m1 = np.array([[1, 0, 0, 2],
-                       [0, 0, -1, 1],
-                       [0, 1, 0, -4],
-                       [0, 0, 0, 1]])
-        m2 = np.array([[0, -1, 0, -1],
-                       [0, 0, -1, 1],
-                       [1, 0, 0, -3],
-                       [0, 0, 0, 1]])
-        cam1 = Camera(m=m1, k=k, h=h, w=w)
-        cam2 = Camera(m=m2, k=k, h=h, w=w)
-        self.raybox.set_cams(cam1, cam2)
-        pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
-        pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
-        self.img1_widg.base = pm1
-        self.img2_widg.base = pm2
-        self.img1_widg.setPixmap(pm1)
-        self.img2_widg.setPixmap(pm2)
+        # b = np.array([-3, -2, 0], dtype=np.float32)
+        # n = np.array([3, 3, 3], dtype=np.int32)
+        # sp = np.array([1, 1, 1], dtype=np.float32)
+        # rho = np.ones((n - 1).tolist(), dtype=np.float32)
+        # self.raybox.set_rho(rho, b, n, sp)
+        # h, w = 768, 768
+        # k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
+        #               [0, 2 * (w / 2), 1 * (w / 2), 0],
+        #               [0, 0, 1, 0]])
+        # m1 = np.array([[1, 0, 0, 2],
+        #                [0, 0, -1, 1],
+        #                [0, 1, 0, -4],
+        #                [0, 0, 0, 1]])
+        # m2 = np.array([[0, -1, 0, -1],
+        #                [0, 0, -1, 1],
+        #                [1, 0, 0, -3],
+        #                [0, 0, 0, 1]])
+        # cam1 = Camera(m=m1, k=k, h=h, w=w)
+        # cam2 = Camera(m=m2, k=k, h=h, w=w)
+        # self.raybox.set_cams(cam1, cam2)
+        # pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
+        # pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
+        # self.img1_widg.base = pm1
+        # self.img2_widg.base = pm2
+        # self.img1_widg.setPixmap(pm1)
+        # self.img2_widg.setPixmap(pm2)
 
 
     @QtCore.Slot(list)
@@ -325,34 +327,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self.base_pixmap_2.emit(QtGui.QPixmap(fpaths[1]))
 
     def set_rho(self, fpaths):
-        b = np.array([-3, -2, 0], dtype=np.float32)
-        n = np.array([3, 3, 3], dtype=np.int32)
-        sp = np.array([1, 1, 1], dtype=np.float32)
-        rho = np.ones((n - 1).tolist(), dtype=np.float32)
+        rho, b, n, sp = self.raybox.get_rho_params(fpaths[0])
         self.raybox.set_rho(rho, b, n, sp)
         print('Set Rho')
-        # TODO
-        # Actually set up rho
 
     def init_cams_from_path(self, fpaths):
-        h, w = 256, 256
-        k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
-                      [0, 2 * (w / 2), 1 * (w / 2), 0],
-                      [0, 0, 1, 0]])
-        m1 = np.array([[1, 0, 0, 2],
-                       [0, 0, -1, 1],
-                       [0, 1, 0, -4],
-                       [0, 0, 0, 1]])
-        m2 = np.array([[0, -1, 0, -1],
-                       [0, 0, -1, 1],
-                       [1, 0, 0, -3],
-                       [0, 0, 0, 1]])
-        cam1 = Camera(m=m1, k=k, h=h, w=w)
-        cam2 = Camera(m=m2, k=k, h=h, w=w)
+        with open(fpaths[0]) as f:
+            s1 = f.read()
+        with open(fpaths[1]) as f:
+            s2 = f.read()
+        m1 = str_to_mat(re.search('M = \[(.*)\]', s1).group(1))
+        k1 = str_to_mat(re.search('K = \[(.*)\]', s1).group(1))
+        m2 = str_to_mat(re.search('M = \[(.*)\]', s2).group(1))
+        k2 = str_to_mat(re.search('K = \[(.*)\]', s2).group(1))
+        cam1 = Camera(m=m1, k=k1, h=768, w=768)
+        cam2 = Camera(m=m2, k=k2, h=768, w=768)
         self.raybox.set_cams(cam1, cam2)
         print('Set cams')
-        # TODO
-        # Actually read cameras
 
 
 if __name__ == '__main__':
