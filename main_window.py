@@ -4,7 +4,7 @@ import numpy as np
 from PySide2 import QtCore, QtGui, QtWidgets
 from raybox import RayBox
 from camera import Camera
-from utils import str_to_mat
+from utils import str_to_mat, read_rho
 
 
 class ThresholdWidget(QtWidgets.QWidget):
@@ -113,12 +113,12 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.setRange(-3E10, 3E10)
         self.ty_widg.setRange(-3E10, 3E10)
         self.tz_widg.setRange(-3E10, 3E10)
-        self.tx_widg.setSingleStep(0.01)
-        self.ty_widg.setSingleStep(0.01)
-        self.tz_widg.setSingleStep(0.01)
-        self.tx_widg.setDecimals(5)
-        self.ty_widg.setDecimals(5)
-        self.tz_widg.setDecimals(5)
+        self.tx_widg.setSingleStep(0.1)
+        self.ty_widg.setSingleStep(0.1)
+        self.tz_widg.setSingleStep(0.1)
+        self.tx_widg.setDecimals(2)
+        self.ty_widg.setDecimals(2)
+        self.tz_widg.setDecimals(2)
         self.tx_widg.valueChanged.connect(self.on_refresh_call)
         self.ty_widg.valueChanged.connect(self.on_refresh_call)
         self.tz_widg.valueChanged.connect(self.on_refresh_call)
@@ -282,7 +282,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.img2_widg.setPixmap(pm2)
 
     @QtCore.Slot()
-    def on_butn_center_volume():
+    def on_butn_center_volume(self):
         self.raybox.center_volume()
 
     @QtCore.Slot(list)
@@ -340,8 +340,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.base_pixmap_2.emit(QtGui.QPixmap(fpaths[1]))
 
     def set_rho(self, fpaths):
-        rho, b, n, sp = self.raybox.get_rho_params(fpaths[0])
-        self.raybox.set_rho(rho, b, n, sp)
+        rho, sp = read_rho(fpaths[0])
+        self.raybox.set_rho(rho, sp)
         print('Set Rho')
 
     def init_cams_from_path(self, fpaths):
