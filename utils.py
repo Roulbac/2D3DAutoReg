@@ -46,8 +46,7 @@ def recons_DLT(x1, x2, p1, p2):
 def read_rho(fpath):
     im = sitk.ReadImage(fpath)
     sp = np.array(im.GetSpacing(), dtype=np.float32)
-    n = np.array(im.GetSize(), dtype=np.int32) + 1
     rho = sitk.GetArrayFromImage(im).transpose((2, 1, 0)).astype(np.float32)
-    return rho, n, sp
+    return rho, sp
 
 

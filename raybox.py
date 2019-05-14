@@ -19,19 +19,19 @@ EPS_FLOAT32 = 2.22045e-016
 
 class RayBox(object):
 
-    def __init__(self, mode='cpu'):
+    def __init__(self, mode='cpu', threshold=300, sid=1001):
         self.mode = mode
         self.cams = []
         self.d_cams = []
-        self.rho_initialized = False
-        self.threshold = np.float32(280)
+        self.threshold = np.float32(threshold)
+        self.sid = np.float32(sid)
         if mode == 'gpu':
             assert _IMP_PYCUDA and cuda.Device.count() > 0
             with open('kernels.cu') as f:
                 source_str = f.read()
             self.cumod = SourceModule(source_str)
             self.f_backproj = self.cumod.get_function('backprojectPixel')
-            self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i'])
+            self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i', 'f'])
             self.f_trace = self.cumod.get_function('traceRay')
             self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i', 'f'])
 
@@ -50,26 +50,11 @@ class RayBox(object):
         else:
             return self.cams
 
-    def get_rho_params(self, fpath):
-        rho, n, sp = read_rho(fpath)
+    def set_rho(self, rho, sp):
         if self.mode == 'gpu':
-            cam1, cam2 = self.d_cams[0][0], self.d_cams[1][0]
+            self._cu_set_rho(rho, sp)
         else:
-            cam1, cam2 = self.cams[0], self.cams[1]
-        p1, p2 = cam1.p, cam2.p
-        x1, x2 = cam1.k[2, :2], cam2.k[2, :2]
-        y = recons_DLT(x1, x2, p1, p2)
-        b = y - ((n-1)*sp)/2
-        return rho, b, n, sp
-
-    # TODO:
-    # Change setting order of rho and camera
-    # Only set b when cams are set!
-    def set_rho(self, rho, b, n, sp):
-        if self.mode == 'gpu':
-            self._cu_set_rho(rho, b, n, sp)
-        else:
-            self._cpu_set_rho(rho, b, n, sp)
+            self._cpu_set_rho(rho, sp)
 
     def trace_rays(self):
         if self.mode == 'gpu':
@@ -82,6 +67,20 @@ class RayBox(object):
             all_raysums[i] = all_raysums[i].reshape(hws[i], order='C')
         return all_raysums
 
+    def center_volume(self):
+        if self.mode == 'gpu':
+            cam1, cam2 = self.d_cams[0][0], self.d_cams[1][0]
+        else:
+            cam1, cam2 = self.cams[0], self.cams[1]
+        p1, p2 = cam1.p, cam2.p
+        x1, x2 = cam1.k[2, :2], cam2.k[2, :2]
+        y = recons_DLT(x1, x2, p1, p2)
+        b = y - ((self.n-1)*self.sp)/2
+        if self.mode == 'gpu':
+            cuda.memcpy_htod(self.d_b, b)
+        else:
+            self.b = b
+
     # -------------------- PRIVATE CPU FUNCTIONS ----------------------
 
     def _cpu_trace_rays(self):
@@ -93,17 +92,20 @@ class RayBox(object):
         # Args is a list of tuples for each cam
         return RayBox._jit_trace_rays(
             self.n, self.sp, self.b,
-            self.rho, self.threshold, camargs)
+            self.rho, self.threshold,
+            camargs, self.sid)
 
     def _cpu_set_cams(self, *cams):
         self.cams = cams
 
-    def _cpu_set_rho(self, rho, b, n, sp):
+    def _cpu_set_rho(self, rho, sp):
+        self.n = np.array(rho.shape, dtype=np.int32) + 1
+        self.sp = np.array(sp, dtype=np.float32)
+        self.b = np.array([0, 0, 0], dtype=np.float32)
         self.rho = rho.flatten()
-        self.b, self.n, self.sp = b, n, sp
 
     @jit(nopython=True)
-    def _jit_trace_rays(n, sp, b, rho, threshold, camargs):
+    def _jit_trace_rays(n, sp, b, rho, threshold, camargs, sid):
         all_raysums = []
         for arg in camargs:
             h, w, minv, kinv, pos, z_sign = arg
@@ -113,7 +115,7 @@ class RayBox(object):
                 i, j = idx // w, idx % w
                 dsts[3*idx:3*idx+3] = _cpu_backproject_pixel(
                     h, w, minv, kinv,
-                    z_sign, i, j
+                    z_sign, i, j, sid
                 )
             for idx in range(h*w):
                 raysums[idx] = _cpu_trace_ray(
@@ -127,16 +129,19 @@ class RayBox(object):
 
     # -------------------- PRIVATE CUDA FUNCTIONS ----------------------
 
-    def _cu_set_rho(self, rho, b, n, sp):
+    def _cu_set_rho(self, rho, sp):
         # Allocate and copy AABB data
+        b = np.array([0, 0, 0], dtype=np.float32)
+        n = np.array(rho.shape, dtype=np.int32) + 1
+        sp = np.array(sp, dtype=np.float32)
         d_rho = cuda.mem_alloc(rho.size*np.nbytes[np.float32])
-        d_b = cuda.mem_alloc(b.size*np.nbytes[np.float32])
-        d_n = cuda.mem_alloc(n.size*np.nbytes[np.int32])
-        d_sp = cuda.mem_alloc(sp.size*np.nbytes[np.float32])
+        d_b = cuda.mem_alloc(3*np.nbytes[np.float32])
+        d_n = cuda.mem_alloc(3*np.nbytes[np.int32])
+        d_sp = cuda.mem_alloc(3*np.nbytes[np.float32])
         cuda.memcpy_htod(d_rho, rho.astype(np.float32))
-        cuda.memcpy_htod(d_b, b.astype(np.float32))
-        cuda.memcpy_htod(d_n, n.astype(np.int32))
-        cuda.memcpy_htod(d_sp, sp.astype(np.float32))
+        cuda.memcpy_htod(d_b, b)
+        cuda.memcpy_htod(d_n, n)
+        cuda.memcpy_htod(d_sp, sp)
         self.d_rho = d_rho
         self.d_b = d_b
         self.d_n = d_n
@@ -173,7 +178,7 @@ class RayBox(object):
             grid = (math.ceil(d_h/block[0]), math.ceil(d_w/block[0]))
             self.f_backproj.prepared_call(
                 grid, block, d_h, d_w, d_dsts,
-                d_minv, d_kinv, d_z_sign
+                d_minv, d_kinv, d_z_sign, self.sid
             )
             self.f_trace.prepared_call(
                 grid, block, d_src, d_dsts, d_raysums,
@@ -189,11 +194,10 @@ class RayBox(object):
 
 
 @jit(nopython=True)
-def _cpu_backproject_pixel(h, w, minv, kinv, z_sign, i, j):
-    SID = 1001
-    dotx = SID*z_sign*(kinv[0]*i + kinv[1]*j + kinv[2]*1)
-    doty = SID*z_sign*(kinv[3]*i + kinv[4]*j + kinv[5]*1)
-    dotz = SID*z_sign*(kinv[6]*i + kinv[7]*j + kinv[8]*1)
+def _cpu_backproject_pixel(h, w, minv, kinv, z_sign, i, j, sid):
+    dotx = sid*z_sign*(kinv[0]*i + kinv[1]*j + kinv[2]*1)
+    doty = sid*z_sign*(kinv[3]*i + kinv[4]*j + kinv[5]*1)
+    dotz = sid*z_sign*(kinv[6]*i + kinv[7]*j + kinv[8]*1)
     dstx = minv[0]*dotx + minv[1]*doty + minv[2]*dotz + minv[3]*1
     dsty = minv[4]*dotx + minv[5]*doty + minv[6]*dotz + minv[7]*1
     dstz = minv[8]*dotx + minv[9]*doty + minv[10]*dotz + minv[11]*1
@@ -215,14 +219,6 @@ def _cpu_trace_ray(srx, sry, srz,
     # Check intersection
     if amin >= amax or amin < 0:
         return 1
-    # else:
-    #     ptx = srx + amin*(dstx - srx)
-    #     pty = sry + amin*(dsty - sry)
-    #     ptz = srz + amin*(dstz - srz)
-    #     if (ptx > (bx + (nx-1)*spx) or ptx < bx) or \
-    #        (pty > (by + (ny-1)*spy) or pty < by) or \
-    #        (ptz > (bz + (nz-1)*spz) or ptz < bz):
-    #         return 1
     # Calculate ijk min/max
     ax = _get_ax(srx, dstx, nx, bx, spx, axmin, axmax, amin, amax)
     ay = _get_ax(sry, dsty, ny, by, spy, aymin, aymax, amin, amax)
@@ -270,16 +266,21 @@ def _get_alphas(b, s, p1, p2, n):
         amin, amax = amax, amin
     return amin, amax
 
-
 @jit(nopython=True)
 def _get_ax(p1, p2, n, b, s, axmin, axmax, amin, amax):
     # IMPORTANT: Replace ceil(x) with floor(x+1) and floor(x) with ceil(x-1)
     if abs(p1 - p2) < EPS_FLOAT32:
         a = MAX_FLOAT32
     elif p1 < p2:
-        imin = math.floor((p1 + amin*(p2-p1) - b)/s + 1) if abs(amin-axmin)>EPS_FLOAT32 else 1
+        if abs(amin-axmin) > EPS_FLOAT32:
+            imin = math.floor((p1 + amin*(p2-p1) - b)/s + 1)
+        else:
+            imin = 1
         a = ((b + imin*s) - p1)/(p2-p1)
     else:
-        imax = math.ceil((p1 + amin*(p2-p1) - b)/s - 1) if abs(amin-axmin)>EPS_FLOAT32 else n-2
+        if abs(amin-axmin) > EPS_FLOAT32:
+            imax = math.ceil((p1 + amin*(p2-p1) - b)/s - 1)
+        else:
+            imax = n-2
         a = ((b + imax*s) - p1)/(p2-p1)
     return a

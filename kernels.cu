@@ -9,7 +9,8 @@ __constant__ float MU_AIR = 0.0007937816;
 
 __global__ void backprojectPixel(
     const int h, const int w, float * dsts,
-    const float * minv, const float * kinv, const int z_sign)
+    const float * minv, const float * kinv,
+    const int z_sign, const float sid)
 {
     int blockId = blockIdx.x + blockIdx.y*gridDim.x;
     int localId = (threadIdx.y*blockDim.x) + threadIdx.x;
@@ -27,12 +28,12 @@ __global__ void backprojectPixel(
     __syncthreads();
 
     int i = threadId / w;
-    int j = threadId - i*w;
+    int j = threadId % w;
     if (threadId < h*w)
     {
-        float dotx = z_sign*(sKinv[0]*i + sKinv[1]*j + sKinv[2]*1);
-        float doty = z_sign*(sKinv[3]*i + sKinv[4]*j + sKinv[5]*1);
-        float dotz = z_sign*(sKinv[6]*i + sKinv[7]*j + sKinv[8]*1);
+        float dotx = sid*z_sign*(sKinv[0]*i + sKinv[1]*j + sKinv[2]*1);
+        float doty = sid*z_sign*(sKinv[3]*i + sKinv[4]*j + sKinv[5]*1);
+        float dotz = sid*z_sign*(sKinv[6]*i + sKinv[7]*j + sKinv[8]*1);
         dsts[3*threadId + 0] = sMinv[0]*dotx + sMinv[1]*doty + sMinv[2]*dotz + sMinv[3]*1;
         dsts[3*threadId + 1] = sMinv[4]*dotx + sMinv[5]*doty + sMinv[6]*dotz + sMinv[7]*1;
         dsts[3*threadId + 2] = sMinv[8]*dotx + sMinv[9]*doty + sMinv[10]*dotz + sMinv[11]*1;
@@ -130,15 +131,6 @@ __global__ void traceRay(
             return;
         }
         else {
-            // float3 pt = make_float3(sSrc[0] + amin*(dst.x - sSrc[0]),
-            //                         sSrc[1] + amin*(dst.y - sSrc[1]),
-            //                         sSrc[2] + amin*(dst.z - sSrc[2]));
-            // if(((pt.x > (sB[0] + (sN[0]-1)*sSp[0])) || (pt.x < sB[0])) ||
-            //     ((pt.y > (sB[1] + (sN[1]-1)*sSp[1])) || (pt.y < sB[1])) ||
-            //     ((pt.z > (sB[2] + (sN[2]-1)*sSp[2])) || (pt.z < sB[2]))) {
-            //     raysums[threadId] = 1;
-            //     return;
-            // }
             float ax = getAx(sSrc[0], dst.x, sN[0], sB[0], sSp[0], axmin, axmax, amin, amax);
             float ay = getAx(sSrc[1], dst.y, sN[1], sB[1], sSp[1], aymin, aymax, amin, amax);
             float az = getAx(sSrc[2], dst.z, sN[2], sB[2], sSp[2], azmin, azmax, amin, amax);
@@ -155,12 +147,11 @@ __global__ void traceRay(
             while((-1 < i && i < (sN[0]-1)) &&
                   (-1 < j && j < (sN[1]-1)) &&
                   (-1 < k && k < (sN[2]-1))){
-                float hu = rho[i + j*(sN[0]-1) + k*(sN[0]-1)*(sN[1]-1)];
-                if (hu < threshold){
-                    raysums[threadId] = 1;
-                    return;
-                }
+                float hu = rho[k + j*(sN[2]-1) + i*(sN[2]-1)*(sN[1]-1)];
                 float mu = ((MU_WATER-MU_AIR)/1000*hu + MU_WATER);
+                if (hu < threshold){
+                    mu = 0;
+                }
                 if(ax == minAxyz){
                     d12 = d12 + (ax - ac)*dconv*mu;
                     i = (sSrc[0] < dst.x)?(i+1): (i-1);

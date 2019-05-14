@@ -1,11 +1,10 @@
-import time
 import sys
 import re
 import numpy as np
 from PySide2 import QtCore, QtGui, QtWidgets
 from raybox import RayBox
 from camera import Camera
-from utils import str_to_mat, recons_DLT, read_rho
+from utils import str_to_mat
 
 
 class ThresholdWidget(QtWidgets.QWidget):
@@ -70,6 +69,7 @@ class ImageWidget(QtWidgets.QLabel):
     @QtCore.Slot(float)
     def on_alpha(self, alpha):
         if self.drr is not None:
+            self.alpha = alpha
             overlay = ImageWidget.np_to_qrgb_pixmap(self.drr, 'r', alpha)
             overlay = overlay.scaled(self.base.size(), QtCore.Qt.IgnoreAspectRatio)
             self.setPixmap(self.base)
@@ -113,9 +113,12 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.setRange(-3E10, 3E10)
         self.ty_widg.setRange(-3E10, 3E10)
         self.tz_widg.setRange(-3E10, 3E10)
-        self.tx_widg.setSingleStep(0.1)
-        self.ty_widg.setSingleStep(0.1)
-        self.tz_widg.setSingleStep(0.1)
+        self.tx_widg.setSingleStep(0.01)
+        self.ty_widg.setSingleStep(0.01)
+        self.tz_widg.setSingleStep(0.01)
+        self.tx_widg.setDecimals(5)
+        self.ty_widg.setDecimals(5)
+        self.tz_widg.setDecimals(5)
         self.tx_widg.valueChanged.connect(self.on_refresh_call)
         self.ty_widg.valueChanged.connect(self.on_refresh_call)
         self.tz_widg.valueChanged.connect(self.on_refresh_call)
@@ -131,6 +134,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.theta_widg.setSingleStep(0.5)
         self.psi_widg.setSingleStep(0.5)
         self.phi_widg.setSingleStep(0.5)
+        self.theta_widg.setDecimals(2)
+        self.psi_widg.setDecimals(2)
+        self.phi_widg.setDecimals(2)
         self.phi_widg.valueChanged.connect(self.on_refresh_call)
         self.theta_widg.valueChanged.connect(self.on_refresh_call)
         self.psi_widg.valueChanged.connect(self.on_refresh_call)
@@ -179,7 +185,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('DRR Viewer')
-        self.setMinimumSize(QtCore.QSize(1280, 600))
+        self.setMinimumSize(QtCore.QSize(1280, 720))
         self.central_widg = QtWidgets.QWidget(self)
         # File dialog
         self.file_dialog = QtWidgets.QFileDialog()
@@ -214,13 +220,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.threshold_widg = ThresholdWidget(self.central_widg)
         # Refresh button
         self.refresh_butn = QtWidgets.QPushButton('Refresh', self)
+        # Center button
+        self.center_butn = QtWidgets.QPushButton('Center volume', self)
         # Layout
+        refr_thr_layout = QtWidgets.QVBoxLayout()
+        refr_thr_layout.addWidget(self.refresh_butn)
+        refr_thr_layout.addWidget(self.center_butn)
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.img1_widg, 0, 0)
         layout.addWidget(self.img2_widg, 0, 2)
         layout.addWidget(self.threshold_widg, 0, 1)
         layout.addWidget(self.params_widg, 1, 0, 1, 2)
-        layout.addWidget(self.refresh_butn, 1, 2)
+        layout.addLayout(refr_thr_layout, 1, 2)
         layout.setRowStretch(0, 1)
         layout.setColumnStretch(0, 1)
         layout.setColumnStretch(2, 1)
@@ -235,6 +246,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.params_widg.alpha_slider.valueChanged.connect(self.on_alphaslider_update)
         self.refresh_butn.released.connect(self.params_widg.on_refresh_call)
         self.threshold_widg.new_threshold.connect(self.on_new_threshold)
+        self.center_butn.released.connect(self.on_butn_center_volume)
         self.alpha.connect(self.img1_widg.on_alpha)
         self.alpha.connect(self.img2_widg.on_alpha)
         self.drr1.connect(self.img1_widg.on_drr)
@@ -269,6 +281,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.img1_widg.setPixmap(pm1)
         # self.img2_widg.setPixmap(pm2)
 
+    @QtCore.Slot()
+    def on_butn_center_volume():
+        self.raybox.center_volume()
 
     @QtCore.Slot(list)
     def on_new_params(self, params):
@@ -288,8 +303,6 @@ class MainWindow(QtWidgets.QMainWindow):
         drr1, drr2 = self.raybox.trace_rays()
         drr1 = (1-drr1)
         drr2 = (1-drr2)
-        # drr1, drr2  = np.ones((768, 768)), np.ones((768, 768))
-        # drr1, drr2 = 0.5*drr1, 0.5*drr2
         print('DRR')
         self.drr1.emit(drr1)
         self.drr2.emit(drr2)
