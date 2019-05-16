@@ -8,6 +8,29 @@ from camera_set import CameraSet
 from utils import str_to_mat, read_rho
 
 
+class RecenterWidget(QtWidgets.QWidget):
+    new_center = QtCore.Signal(list)
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.input_box = QtWidgets.QLineEdit(self)
+        self.input_box.setPlaceholderText('X,Y,Z')
+        self.input_box.setAlignment(QtCore.Qt.AlignCenter)
+        rx = QtCore.QRegExp('-?\\d+(.?\\d*)?,-?\\d+(.?\\d*)?,-?\\d+(.?\\d*)?')
+        self.input_box.setValidator(QtGui.QRegExpValidator(rx, self))
+        self.button = QtWidgets.QPushButton('Recenter at', self)
+        self.button.clicked.connect(self.on_recenter_but)
+        self.layout = QtWidgets.QVBoxLayout()
+        self.layout.addWidget(self.input_box, QtCore.Qt.AlignHCenter)
+        self.layout.addWidget(self.button)
+        self.setLayout(self.layout)
+
+    @QtCore.Slot()
+    def on_recenter_but(self):
+        cords_str = self.input_box.text()
+        center = list(map(lambda x: float(x), cords_str.split(',')))
+        self.new_center.emit(center)
+
 class ThresholdWidget(QtWidgets.QWidget):
     new_threshold = QtCore.Signal(float)
 
@@ -120,9 +143,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.setDecimals(2)
         self.ty_widg.setDecimals(2)
         self.tz_widg.setDecimals(2)
-        self.tx_widg.valueChanged.connect(self.on_refresh_call)
-        self.ty_widg.valueChanged.connect(self.on_refresh_call)
-        self.tz_widg.valueChanged.connect(self.on_refresh_call)
+        self.tx_widg.editingFinished.connect(self.on_refresh_call)
+        self.ty_widg.editingFinished.connect(self.on_refresh_call)
+        self.tz_widg.editingFinished.connect(self.on_refresh_call)
         self.phi_widg = QtWidgets.QDoubleSpinBox(self)
         self.theta_widg = QtWidgets.QDoubleSpinBox(self)
         self.psi_widg = QtWidgets.QDoubleSpinBox(self)
@@ -138,9 +161,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.theta_widg.setDecimals(2)
         self.psi_widg.setDecimals(2)
         self.phi_widg.setDecimals(2)
-        self.phi_widg.valueChanged.connect(self.on_refresh_call)
-        self.theta_widg.valueChanged.connect(self.on_refresh_call)
-        self.psi_widg.valueChanged.connect(self.on_refresh_call)
+        self.phi_widg.editingFinished.connect(self.on_refresh_call)
+        self.theta_widg.editingFinished.connect(self.on_refresh_call)
+        self.psi_widg.editingFinished.connect(self.on_refresh_call)
         # Layout
         self.layout = QtWidgets.QGridLayout()
         self.layout.addWidget(self.alpha_slider, 0, 0, 1, 2)
@@ -173,6 +196,14 @@ class ParametersWidget(QtWidgets.QWidget):
                   self.psi_widg.value()]
         return params
 
+    def set_params(self, *params):
+        tx, ty, tz, phi, theta, psi = params
+        self.tx_widg.setValue(tx)
+        self.ty_widg.setValue(ty)
+        self.tz_widg.setValue(tz)
+        self.phi_widg.setValue(phi)
+        self.theta_widg.setValue(theta)
+        self.psi_widg.setValue(psi)
 
 class MainWindow(QtWidgets.QMainWindow):
     new_ct = QtCore.Signal(list)
@@ -206,10 +237,6 @@ class MainWindow(QtWidgets.QMainWindow):
             action.triggered.connect(self.fd_in_out[entry][0])
             self.file_menu.addAction(action)
         self.edit_menu = self.menu.addMenu('Edit')
-        runoptim_action = QtWidgets.QAction('Run Optimizer', self)
-        self.edit_menu.addAction(runoptim_action)
-        popup_3d_action = QtWidgets.QAction('Pop up 3D visualizer', self)
-        self.edit_menu.addAction(popup_3d_action)
         # Status bar
         self.status_bar = self.statusBar()
         # Images
@@ -221,12 +248,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.threshold_widg = ThresholdWidget(self.central_widg)
         # Refresh button
         self.refresh_butn = QtWidgets.QPushButton('Refresh', self)
-        # Center button
-        self.center_butn = QtWidgets.QPushButton('Center volume', self)
+        # Recenter button
+        self.recenter_widg = RecenterWidget(self)
         # Layout
         refr_thr_layout = QtWidgets.QVBoxLayout()
         refr_thr_layout.addWidget(self.refresh_butn)
-        refr_thr_layout.addWidget(self.center_butn)
+        refr_thr_layout.addWidget(self.recenter_widg)
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.img1_widg, 0, 0)
         layout.addWidget(self.img2_widg, 0, 2)
@@ -245,9 +272,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.base_pixmap_2.connect(self.img2_widg.on_base_pixmap)
         self.params_widg.refresh_params.connect(self.on_new_params)
         self.params_widg.alpha_slider.valueChanged.connect(self.on_alphaslider_update)
-        self.refresh_butn.released.connect(self.params_widg.on_refresh_call)
+        self.refresh_butn.released.connect(self.on_refresh_butn)
         self.threshold_widg.new_threshold.connect(self.on_new_threshold)
-        self.center_butn.released.connect(self.on_butn_center_volume)
+        self.recenter_widg.new_center.connect(self.on_new_center)
         self.alpha.connect(self.img1_widg.on_alpha)
         self.alpha.connect(self.img2_widg.on_alpha)
         self.drr1.connect(self.img1_widg.on_drr)
@@ -255,6 +282,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # Logic
         self.raybox = RayBox('cpu')
         self.camera_set = None
+        runoptim_action = QtWidgets.QAction('Run Optimizer', self)
+        self.edit_menu.addAction(runoptim_action)
+        popup_3d_action = QtWidgets.QAction('Pop up 3D visualizer', self)
+        self.edit_menu.addAction(popup_3d_action)
+        popup_3d_action.triggered.connect(self.plot_set)
         # Debug stuff
         # b = np.array([-3, -2, 0], dtype=np.float32)
         # n = np.array([3, 3, 3], dtype=np.int32)
@@ -284,19 +316,18 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.img2_widg.setPixmap(pm2)
 
     @QtCore.Slot()
-    def on_butn_center_volume(self):
-        #self.raybox.center_volume()
-        pass
+    def plot_set(self):
+        self.camera_set.plot_camera_set()
+
+    @QtCore.Slot(list)
+    def on_new_center(self, center):
+        self.camera_set.move_to(np.array(center))
+        self.params_widg.set_params(*(self.camera_set.params))
 
     @QtCore.Slot(list)
     def on_new_params(self, params):
         self.camera_set.set_tfm_params(*params)
-        drr1, drr2 = self.raybox.trace_rays()
-        drr1 = (1-drr1)
-        drr2 = (1-drr2)
-        print('DRR')
-        self.drr1.emit(drr1)
-        self.drr2.emit(drr2)
+        self.draw_drrs()
 
     @QtCore.Slot(int)
     def on_alphaslider_update(self, val):
@@ -329,6 +360,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.fd_in_out['X-Ray Files'][1] = fpaths
             self.base_pixmap_1.emit(QtGui.QPixmap(fpaths[0]))
             self.base_pixmap_2.emit(QtGui.QPixmap(fpaths[1]))
+
+    @QtCore.Slot()
+    def on_refresh_butn(self):
+        self.draw_drrs()
+
+    def draw_drrs(self):
+        drr1, drr2 = self.raybox.trace_rays()
+        drr1 = (1-drr1)
+        drr2 = (1-drr2)
+        print('DRR')
+        self.drr1.emit(drr1)
+        self.drr2.emit(drr2)
 
     def set_rho(self, fpaths):
         rho, sp = read_rho(fpaths[0])

@@ -16,7 +16,7 @@ def test_camera_set_tfm():
     plt.ion()
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    for psi in range(0, 360, 1):
+    for psi in range(0, 360, 10):
         params = [0, 0, 0, 0, 0, psi]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot(fig, ax)
@@ -41,7 +41,7 @@ def test_camera_set_tfm():
         fig.canvas.flush_events()
         plt.pause(0.001)
         ax.clear()
-    for theta in range(0, 360, 1):
+    for theta in range(0, 360, 10):
         params = [0, 0, 0, 0, theta, 0]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot(fig, ax)
@@ -66,7 +66,7 @@ def test_camera_set_tfm():
         fig.canvas.flush_events()
         plt.pause(0.001)
         ax.clear()
-    for phi in range(0, 360, 1):
+    for phi in range(0, 360, 10):
         params = [0, 0, 0, phi, 0, 0]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot(fig, ax)
@@ -109,6 +109,10 @@ def test_camera_set_tfm():
                   [center[1], center[1] +   0],
                   [center[2], center[2] + 100],
                   color='blue')
+        ax.plot3D([center[0] - camset.params[0]],
+                  [center[1] - camset.params[1]],
+                  [center[2] - camset.params[2]],
+                  marker='*', color='red')
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
@@ -116,7 +120,7 @@ def test_camera_set_tfm():
         fig.canvas.flush_events()
         plt.pause(0.001)
         ax.clear()
-    for ty in range(-500, 500, 5):
+    for ty in range(-100, 100, 5):
         params = [0, ty, 0, 0, 0, 0]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot(fig, ax)
@@ -134,6 +138,10 @@ def test_camera_set_tfm():
                   [center[1], center[1] +   0],
                   [center[2], center[2] + 100],
                   color='blue')
+        ax.plot3D([center[0] - camset.params[0]],
+                  [center[1] - camset.params[1]],
+                  [center[2] - camset.params[2]],
+                  marker='*', color='red')
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
@@ -141,7 +149,7 @@ def test_camera_set_tfm():
         fig.canvas.flush_events()
         plt.pause(0.001)
         ax.clear()
-    for tz in range(-500, 500, 5):
+    for tz in range(-100, 100, 5):
         params = [0, 0, tz, 0, 0, 0]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot(fig, ax)
@@ -159,6 +167,10 @@ def test_camera_set_tfm():
                   [center[1], center[1] +   0],
                   [center[2], center[2] + 100],
                   color='blue')
+        ax.plot3D([center[0] - camset.params[0]],
+                  [center[1] - camset.params[1]],
+                  [center[2] - camset.params[2]],
+                  marker='*', color='red')
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)

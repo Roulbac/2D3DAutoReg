@@ -85,9 +85,9 @@ class Camera(object):
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
         ax.grid(False)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_zticks([])
+        # ax.set_xticks([])
+        # ax.set_yticks([])
+        # ax.set_zticks([])
         utils.set_axes_equal(ax)
 
     def get_focalplane_pt(self, x):

@@ -10,20 +10,28 @@ class CameraSet(object):
         self.cam1 = cam1
         self.cam2 = cam2
         self.center = self._get_center(cam1, cam2)
+        # tx ty tz phi (x) theta (y) psi (x)
+        self.params = [0, 0, 0, 0, 0, 0]
         self.tfm = np.eye(4)
 
-    def displace(self, dst):
-        t = dst - self.center
-        r = self.tfm[:3, :3]
-        self.set_tfm(r, t)
+    def move_to(self, dst):
+        tx = self.center[0] - dst[0]
+        ty = self.center[1] - dst[1]
+        tz = self.center[2] - dst[2]
+        phi = self.params[3]
+        theta = self.params[4]
+        psi = self.params[5]
+        self.set_tfm_params(tx, ty, tz, phi, theta, psi)
+        print(tx, ty, tz, phi, theta, psi)
 
     def set_tfm_params(self, *params):
+        self.params = list(params)
         r, t = CameraSet.params_to_mat(*params)
         self.set_centered_tfm(r, t)
 
     def set_centered_tfm(self, r, t):
         c = self.center
-        t = (-r.dot(c) + c + t).reshape((3, 1))
+        t = (-r.dot(c - t) + c).reshape((3, 1))
         tfm = np.block([[r,       t],
                         [0, 0, 0, 1]])
         self.cam1.tfm, self.cam2.tfm = tfm, tfm
@@ -64,5 +72,28 @@ class CameraSet(object):
         ax = fig.gca(projection='3d')
         self.cam1._make_cam_plot(fig, ax)
         self.cam2._make_cam_plot(fig, ax)
-        return fig, ax
+        center = self.center - \
+                np.array([self.params[0],
+                          self.params[1],
+                          self.params[2]])
+        ax.plot3D([center[0], center[0] + 100],
+                  [center[1], center[1] +   0],
+                  [center[2], center[2] +   0],
+                  color='red')
+        ax.plot3D([center[0], center[0] +   0],
+                  [center[1], center[1] + 100],
+                  [center[2], center[2] +   0],
+                  color='green')
+        ax.plot3D([center[0], center[0] +   0],
+                  [center[1], center[1] +   0],
+                  [center[2], center[2] + 100],
+                  color='blue')
+        ax.plot3D([center[0]],
+                  [center[1]],
+                  [center[2]],
+                  marker='*', color='red')
+        ax.set_xlim3d(center[0] - 600, center[0] + 600)
+        ax.set_ylim3d(center[1] - 600, center[1] + 600)
+        ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        plt.show(block=False)
 
