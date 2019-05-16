@@ -4,6 +4,7 @@ import numpy as np
 from PySide2 import QtCore, QtGui, QtWidgets
 from raybox import RayBox
 from camera import Camera
+from camera_set import CameraSet
 from utils import str_to_mat, read_rho
 
 
@@ -253,6 +254,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.drr2.connect(self.img2_widg.on_drr)
         # Logic
         self.raybox = RayBox('cpu')
+        self.camera_set = None
         # Debug stuff
         # b = np.array([-3, -2, 0], dtype=np.float32)
         # n = np.array([3, 3, 3], dtype=np.int32)
@@ -283,23 +285,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_butn_center_volume(self):
-        self.raybox.center_volume()
+        #self.raybox.center_volume()
+        pass
 
     @QtCore.Slot(list)
     def on_new_params(self, params):
-        new_tfm = Camera.m_from_params(params)
-        cams = self.raybox.get_cams()
-        cams[0].tfm = new_tfm
-        m = cams[0].m
-        m_prime = cams[1].m
-        cams[1].tfm = np.linalg.multi_dot(
-            [m_prime,
-             np.linalg.inv(m),
-             new_tfm,
-             m,
-             np.linalg.inv(m_prime)]
-        )
-        self.raybox.set_cams(*cams)
+        self.camera_set.set_tfm_params(*params)
         drr1, drr2 = self.raybox.trace_rays()
         drr1 = (1-drr1)
         drr2 = (1-drr2)
@@ -355,6 +346,7 @@ class MainWindow(QtWidgets.QMainWindow):
         k2 = str_to_mat(re.search('K = \[(.*)\]', s2).group(1))
         cam1 = Camera(m=m1, k=k1, h=768, w=768)
         cam2 = Camera(m=m2, k=k2, h=768, w=768)
+        self.camera_set = CameraSet(cam1, cam2)
         self.raybox.set_cams(cam1, cam2)
         print('Set cams')
 

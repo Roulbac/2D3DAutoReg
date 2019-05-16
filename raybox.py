@@ -67,6 +67,7 @@ class RayBox(object):
             all_raysums[i] = all_raysums[i].reshape(hws[i], order='C')
         return all_raysums
 
+    # TODO: REMOVE
     def center_volume(self):
         if self.mode == 'gpu':
             cam1, cam2 = self.d_cams[0][0], self.d_cams[1][0]
