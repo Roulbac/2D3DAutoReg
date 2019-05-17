@@ -39,7 +39,7 @@ class CameraSet(object):
 
     @staticmethod
     def _get_center(cam1, cam2):
-        x1, x2 = cam1.k[:2, 3], cam2.k[:2, 3]
+        x1, x2 = cam1.k[:2, 2], cam2.k[:2, 2]
         p1, p2 = cam1.p, cam2.p
         return recons_DLT(x1, x2, p1, p2)
 
