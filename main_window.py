@@ -137,9 +137,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.setRange(-3E10, 3E10)
         self.ty_widg.setRange(-3E10, 3E10)
         self.tz_widg.setRange(-3E10, 3E10)
-        self.tx_widg.setSingleStep(0.1)
-        self.ty_widg.setSingleStep(0.1)
-        self.tz_widg.setSingleStep(0.1)
+        self.tx_widg.setSingleStep(5)
+        self.ty_widg.setSingleStep(5)
+        self.tz_widg.setSingleStep(5)
         self.tx_widg.setDecimals(2)
         self.ty_widg.setDecimals(2)
         self.tz_widg.setDecimals(2)
@@ -155,9 +155,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.phi_widg.setRange(-180, 180)
         self.theta_widg.setRange(-180, 180)
         self.psi_widg.setRange(-180, 180)
-        self.theta_widg.setSingleStep(0.5)
-        self.psi_widg.setSingleStep(0.5)
-        self.phi_widg.setSingleStep(0.5)
+        self.theta_widg.setSingleStep(5)
+        self.psi_widg.setSingleStep(5)
+        self.phi_widg.setSingleStep(5)
         self.theta_widg.setDecimals(2)
         self.psi_widg.setDecimals(2)
         self.phi_widg.setDecimals(2)
@@ -362,6 +362,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.file_dialog.exec_():
             fpaths = self.file_dialog.selectedFiles()
             self.fd_in_out['Camera Files'][1] = fpaths
+            print(fpaths)
             self.init_cams_from_path(fpaths)
 
     @QtCore.Slot()
