@@ -20,20 +20,47 @@ EPS_FLOAT32 = 2.22045e-016
 class RayBox(object):
 
     def __init__(self, mode='cpu', threshold=300, sid=1001):
-        self.mode = mode
+        self._mode = mode
         self.cams = []
         self.d_cams = []
         self.threshold = np.float32(threshold)
         self.sid = np.float32(sid)
         if mode == 'gpu':
-            assert _IMP_PYCUDA and cuda.Device.count() > 0
-            with open('kernels.cu') as f:
-                source_str = f.read()
-            self.cumod = SourceModule(source_str)
-            self.f_backproj = self.cumod.get_function('backprojectPixel')
-            self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i', 'f'])
-            self.f_trace = self.cumod.get_function('traceRay')
-            self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i', 'f'])
+            self.init_cuda_kernels()
+
+    def init_cuda_kernels(self):
+        assert _IMP_PYCUDA and cuda.Device.count() > 0
+        with open('kernels.cu') as f:
+            source_str = f.read()
+        self.cumod = SourceModule(source_str)
+        self.f_backproj = self.cumod.get_function('backprojectPixel')
+        self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i', 'f'])
+        self.f_trace = self.cumod.get_function('traceRay')
+        self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i', 'f'])
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, mode):
+        if self.mode == mode:
+            return
+        else:
+            self._mode = mode
+            if mode == 'gpu':
+                self.init_cuda_kernels()
+                if len(self.cams) > 0:
+                    self.set_cams(*self.cams)
+                if hasattr(self, 'rho') and hasattr(self, 'sp'):
+                    print('Set Rho')
+                    self.set_rho(self.rho, self.sp)
+            else:
+                if len(self.d_cams) > 0:
+                    cams = list(map(lambda x: x[0], self.d_cams))
+                    self.set_cams(*cams)
+                if hasattr(self, 'rho') and hasattr(self, 'sp'):
+                    self.set_rho(self.rho, self.sp)
 
     def set_threshold(self, threshold):
         self.threshold = np.float32(threshold)
@@ -67,20 +94,6 @@ class RayBox(object):
             all_raysums[i] = all_raysums[i].reshape(hws[i], order='C')
         return all_raysums
 
-    # TODO: REMOVE
-    def center_volume(self):
-        if self.mode == 'gpu':
-            cam1, cam2 = self.d_cams[0][0], self.d_cams[1][0]
-        else:
-            cam1, cam2 = self.cams[0], self.cams[1]
-        p1, p2 = cam1.p, cam2.p
-        x1, x2 = cam1.k[2, :2], cam2.k[2, :2]
-        y = recons_DLT(x1, x2, p1, p2)
-        b = y - ((self.n-1)*self.sp)/2
-        if self.mode == 'gpu':
-            cuda.memcpy_htod(self.d_b, b)
-        else:
-            self.b = b
 
     # -------------------- PRIVATE CPU FUNCTIONS ----------------------
 
@@ -103,9 +116,9 @@ class RayBox(object):
         self.n = np.array(rho.shape, dtype=np.int32) + 1
         self.sp = np.array(sp, dtype=np.float32)
         self.b = np.array([0, 0, 0], dtype=np.float32)
-        self.rho = rho.flatten()
+        self.rho = np.ascontiguousarray(rho.flatten(), dtype=np.float32)
 
-    @jit(nopython=True)
+    # @jit(nopython=True)
     def _jit_trace_rays(n, sp, b, rho, threshold, camargs, sid):
         all_raysums = []
         for arg in camargs:
@@ -132,17 +145,20 @@ class RayBox(object):
 
     def _cu_set_rho(self, rho, sp):
         # Allocate and copy AABB data
-        b = np.array([0, 0, 0], dtype=np.float32)
         n = np.array(rho.shape, dtype=np.int32) + 1
+        b = np.array([0, 0, 0], dtype=np.float32)
         sp = np.array(sp, dtype=np.float32)
-        d_rho = cuda.mem_alloc(rho.size*np.nbytes[np.float32])
         d_b = cuda.mem_alloc(3*np.nbytes[np.float32])
         d_n = cuda.mem_alloc(3*np.nbytes[np.int32])
         d_sp = cuda.mem_alloc(3*np.nbytes[np.float32])
-        cuda.memcpy_htod(d_rho, rho.astype(np.float32))
+        rho = np.ascontiguousarray(rho.flatten(), dtype=np.float32)
+        d_rho = cuda.mem_alloc(rho.size*np.nbytes[np.float32])
+        cuda.memcpy_htod(d_rho, rho)
         cuda.memcpy_htod(d_b, b)
         cuda.memcpy_htod(d_n, n)
         cuda.memcpy_htod(d_sp, sp)
+        self.rho = rho
+        self.sp = sp
         self.d_rho = d_rho
         self.d_b = d_b
         self.d_n = d_n

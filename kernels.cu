@@ -51,7 +51,7 @@ __device__ void getAlphas(
     const float & b, const float & s, const float & p1,
     const float & p2, const int & n, float & amin, float & amax)
 {
-    if (fabsf(p2 - p1) < EPS_FLOAT32) {
+    if (fabsf(p1 - p2) < EPS_FLOAT32) {
         amin = MIN_FLOAT32;
         amax = MAX_FLOAT32;
     }
@@ -148,9 +148,12 @@ __global__ void traceRay(
                   (-1 < j && j < (sN[1]-1)) &&
                   (-1 < k && k < (sN[2]-1))){
                 float hu = rho[k + j*(sN[2]-1) + i*(sN[2]-1)*(sN[1]-1)];
-                float mu = ((MU_WATER-MU_AIR)/1000*hu + MU_WATER);
+                float mu = 0;
                 if (hu < threshold){
                     mu = 0;
+                }
+                else{
+                    mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER);
                 }
                 if(ax == minAxyz){
                     d12 = d12 + (ax - ac)*dconv*mu;

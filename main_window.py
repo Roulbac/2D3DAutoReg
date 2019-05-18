@@ -225,7 +225,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_dialog.setViewMode(QtWidgets.QFileDialog.List)
         self.file_dialog_out = ''
         # Menu
-        self.menu = QtWidgets.QMenuBar()
+        self.menu = self.menuBar()
         self.file_menu = self.menu.addMenu('File')
         self.fd_in_out = {
             'CT': [self.on_ct_menu, ''],
@@ -280,13 +280,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.drr1.connect(self.img1_widg.on_drr)
         self.drr2.connect(self.img2_widg.on_drr)
         # Logic
-        self.raybox = RayBox('cpu')
+        self.raybox = RayBox()
         self.camera_set = None
         runoptim_action = QtWidgets.QAction('Run Optimizer', self)
         self.edit_menu.addAction(runoptim_action)
         popup_3d_action = QtWidgets.QAction('Pop up 3D visualizer', self)
         self.edit_menu.addAction(popup_3d_action)
         popup_3d_action.triggered.connect(self.plot_set)
+        gpu_mode_action = QtWidgets.QAction('GPU mode', self)
+        gpu_mode_action.setCheckable(True)
+        gpu_mode_action.toggled.connect(self.on_toggled_gpu_mode)
+        self.edit_menu.addAction(gpu_mode_action)
         # Debug stuff
         # b = np.array([-3, -2, 0], dtype=np.float32)
         # n = np.array([3, 3, 3], dtype=np.int32)
@@ -314,6 +318,13 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.img2_widg.base = pm2
         # self.img1_widg.setPixmap(pm1)
         # self.img2_widg.setPixmap(pm2)
+
+    @QtCore.Slot(bool)
+    def on_toggled_gpu_mode(self, checked):
+        if checked:
+            self.raybox.mode = 'gpu'
+        else:
+            self.raybox.mode = 'cpu'
 
     @QtCore.Slot()
     def plot_set(self):

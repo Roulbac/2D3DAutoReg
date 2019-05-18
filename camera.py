@@ -62,11 +62,11 @@ class Camera(object):
     def pos(self):
         return -self.r.T.dot(self.t)
 
-    def _make_cam_plot(self, fig, ax):
+    def _make_cam_plot(self, fig, ax, suffix=''):
         r, pos = self.r, self.pos
         u, v, w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
         # Camera frame
-        ax.text(pos[0], pos[1], pos[2], 'Camera')
+        ax.text(pos[0], pos[1], pos[2], 'Camera_{}'.format(suffix))
         ax.plot3D([pos[0]], [pos[1]], [pos[2]], color='red', marker='*')
         ax.plot3D([0], [0], [0], color='blue', marker='*')
         ax.plot3D([pos[0], pos[0] + u[0]],
@@ -81,10 +81,10 @@ class Camera(object):
                   [pos[1], pos[1] + w[1]],
                   [pos[2], pos[2] + w[2]],
                   color='blue')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.grid(False)
+        #ax.set_xlabel('X')
+        #ax.set_ylabel('Y')
+        #ax.set_zlabel('Z')
+        #ax.grid(False)
         # ax.set_xticks([])
         # ax.set_yticks([])
         # ax.set_zticks([])

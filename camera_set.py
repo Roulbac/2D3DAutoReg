@@ -70,8 +70,12 @@ class CameraSet(object):
     def plot_camera_set(self):
         fig = plt.figure()
         ax = fig.gca(projection='3d')
-        self.cam1._make_cam_plot(fig, ax)
-        self.cam2._make_cam_plot(fig, ax)
+        self.cam1._make_cam_plot(fig, ax, suffix='1')
+        self.cam2._make_cam_plot(fig, ax, suffix='2')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.grid(False)
         center = self.center - \
                 np.array([self.params[0],
                           self.params[1],

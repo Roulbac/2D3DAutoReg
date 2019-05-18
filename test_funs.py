@@ -199,9 +199,8 @@ def test_drr_sawbones():
     from camera import Camera
     from raybox import RayBox
     import matplotlib.pyplot as plt
-    b = np.array([0, 0, 0], dtype=np.float32)
-    h = np.int32(460)
-    w = np.int32(460)
+    h = np.int32(100)
+    w = np.int32(100)
     m = np.array([[0, 0, -1, 143],
                    [1,  0, 0, -96],
                    [0,  -1, 0, -770]])
@@ -213,16 +212,16 @@ def test_drr_sawbones():
     #    [ 0.        ,  0.39073113, -0.92050485, -0.64241966],
     #    [ 0.        ,  0.92050485,  0.39073113, -4.07275054],
     #    [ 0.        ,  0.        ,  0.        ,  1.        ]])
-    rho = sitk.GetArrayFromImage(sitk.ReadImage('Test_data/Sawbones_L2L3/sawbones.nii.gz')).transpose((1, 2, 0)).astype(np.float32)
+    rho = sitk.GetArrayFromImage(sitk.ReadImage('Test_Data/Sawbones_L2L3/sawbones.nii.gz')).transpose((1, 2, 0)).astype(np.float32)
     sp = np.array([0.375, 0.375, 0.625], dtype=np.float32)[[1, 0, 2]]
     n = np.array([513, 513, 456], dtype=np.int32)[[1, 0, 2]]
     rho = rho[::, ::-1, ::]
     #rho = np.ones((512, 512, 455))
     cam1 = Camera(m, k, h=h, w=w)
     cam2 = Camera(m, k, h=h, w=w)
-    raybox = RayBox('cpu')
+    raybox = RayBox('gpu')
     raybox.set_cams(cam1, cam2)
-    raybox.set_rho(rho, b, n, sp)
+    raybox.set_rho(rho, sp)
     raysums1, raysums2 = raybox.trace_rays()
     print(raysums1.max(), raysums2.max())
     plt.imsave('raysums1.png', raysums1, cmap='gray', vmin=0, vmax=1)
@@ -247,9 +246,7 @@ def test_raybox_class():
     #    [ 0.        ,  0.        ,  0.      #  ,  1.        ]])
     h = np.int32(768)
     w = np.int32(768)
-    src = np.array([-2, 4, 1], dtype=np.float32)
-    b = np.array([-3, -2, 0], dtype=np.float32)
-    n = np.array([3, 3, 3], dtype=np.int32)
+    n = np.array([8, 8, 8], dtype=np.int32)
     sp = np.array([1, 1, 1], dtype=np.float32)
     k = np.array([[2*(h/2), 0,       1*(h/2), 0],
                   [0,       2*(w/2), 1*(w/2), 0],
@@ -257,9 +254,9 @@ def test_raybox_class():
     rho = np.ones((n-1).tolist(), dtype=np.float32)
     cam1 = Camera(m, k, h=h, w=w)
     cam2 = Camera(m, k, h=h, w=w)
-    raybox = RayBox('cpu')
+    raybox = RayBox('gpu')
     raybox.set_cams(cam1, cam2)
-    raybox.set_rho(rho, b, n, sp)
+    raybox.set_rho(rho, sp)
     raysums1, raysums2 = raybox.trace_rays()
     print(raysums1.max(), raysums2.max())
     plt.imsave('raysums1.png', raysums1, cmap='gray')
