@@ -199,8 +199,8 @@ def test_drr_sawbones():
     from camera import Camera
     from raybox import RayBox
     import matplotlib.pyplot as plt
-    h = np.int32(100)
-    w = np.int32(100)
+    h = np.int32(460)
+    w = np.int32(460)
     m = np.array([[0, 0, -1, 143],
                    [1,  0, 0, -96],
                    [0,  -1, 0, -770]])
@@ -219,9 +219,10 @@ def test_drr_sawbones():
     #rho = np.ones((512, 512, 455))
     cam1 = Camera(m, k, h=h, w=w)
     cam2 = Camera(m, k, h=h, w=w)
-    raybox = RayBox('gpu')
+    raybox = RayBox('cpu')
     raybox.set_cams(cam1, cam2)
     raybox.set_rho(rho, sp)
+    raybox.mode = 'gpu'
     raysums1, raysums2 = raybox.trace_rays()
     print(raysums1.max(), raysums2.max())
     plt.imsave('raysums1.png', raysums1, cmap='gray', vmin=0, vmax=1)

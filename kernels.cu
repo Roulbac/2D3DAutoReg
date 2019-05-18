@@ -148,12 +148,9 @@ __global__ void traceRay(
                   (-1 < j && j < (sN[1]-1)) &&
                   (-1 < k && k < (sN[2]-1))){
                 float hu = rho[k + j*(sN[2]-1) + i*(sN[2]-1)*(sN[1]-1)];
-                float mu = 0;
+                float mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER);
                 if (hu < threshold){
                     mu = 0;
-                }
-                else{
-                    mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER);
                 }
                 if(ax == minAxyz){
                     d12 = d12 + (ax - ac)*dconv*mu;

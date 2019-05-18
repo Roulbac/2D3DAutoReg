@@ -51,15 +51,16 @@ class RayBox(object):
             if mode == 'gpu':
                 self.init_cuda_kernels()
                 if len(self.cams) > 0:
+                    print('Set cams')
                     self.set_cams(*self.cams)
-                if hasattr(self, 'rho') and hasattr(self, 'sp'):
+                if hasattr(self, 'rho'):
                     print('Set Rho')
                     self.set_rho(self.rho, self.sp)
             else:
                 if len(self.d_cams) > 0:
                     cams = list(map(lambda x: x[0], self.d_cams))
                     self.set_cams(*cams)
-                if hasattr(self, 'rho') and hasattr(self, 'sp'):
+                if hasattr(self, 'rho'):
                     self.set_rho(self.rho, self.sp)
 
     def set_threshold(self, threshold):
@@ -106,7 +107,7 @@ class RayBox(object):
         # Args is a list of tuples for each cam
         return RayBox._jit_trace_rays(
             self.n, self.sp, self.b,
-            self.rho, self.threshold,
+            self.rho_c, self.threshold,
             camargs, self.sid)
 
     def _cpu_set_cams(self, *cams):
@@ -116,9 +117,10 @@ class RayBox(object):
         self.n = np.array(rho.shape, dtype=np.int32) + 1
         self.sp = np.array(sp, dtype=np.float32)
         self.b = np.array([0, 0, 0], dtype=np.float32)
-        self.rho = np.ascontiguousarray(rho.flatten(), dtype=np.float32)
+        self.rho_c = np.ascontiguousarray(rho.flatten(), dtype=np.float32)
+        self.rho = rho
 
-    # @jit(nopython=True)
+    @jit(nopython=True)
     def _jit_trace_rays(n, sp, b, rho, threshold, camargs, sid):
         all_raysums = []
         for arg in camargs:
@@ -145,20 +147,22 @@ class RayBox(object):
 
     def _cu_set_rho(self, rho, sp):
         # Allocate and copy AABB data
-        n = np.array(rho.shape, dtype=np.int32) + 1
-        b = np.array([0, 0, 0], dtype=np.float32)
-        sp = np.array(sp, dtype=np.float32)
+        self.rho = rho
+        self.sp = np.array(sp, dtype=np.float32)
+        self.n = np.array(rho.shape, dtype=np.int32) + 1
+        self.b = np.array([0, 0, 0], dtype=np.float32)
         d_b = cuda.mem_alloc(3*np.nbytes[np.float32])
         d_n = cuda.mem_alloc(3*np.nbytes[np.int32])
         d_sp = cuda.mem_alloc(3*np.nbytes[np.float32])
         rho = np.ascontiguousarray(rho.flatten(), dtype=np.float32)
         d_rho = cuda.mem_alloc(rho.size*np.nbytes[np.float32])
-        cuda.memcpy_htod(d_rho, rho)
-        cuda.memcpy_htod(d_b, b)
-        cuda.memcpy_htod(d_n, n)
-        cuda.memcpy_htod(d_sp, sp)
-        self.rho = rho
-        self.sp = sp
+        cuda.memcpy_htod(
+            d_rho,
+            np.ascontiguousarray(self.rho.flatten(), dtype=np.float32)
+        )
+        cuda.memcpy_htod(d_b, self.b)
+        cuda.memcpy_htod(d_n, self.n)
+        cuda.memcpy_htod(d_sp, self.sp)
         self.d_rho = d_rho
         self.d_b = d_b
         self.d_n = d_n
@@ -252,10 +256,9 @@ def _cpu_trace_ray(srx, sry, srz,
     while 0 <= i < nx - 1 and 0 <= j < ny - 1 and 0 <= k < nz - 1:
         idx = k + (nz-1)*j + (nz-1)*(ny-1)*i
         hu = rho[idx]
+        mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER)
         if hu < threshold:
             mu = 0
-        else:
-            mu = (hu*(MU_WATER-MU_AIR)/1000 + MU_WATER)
         if ax == min(ax, ay, az):
             d12 = d12 + (ax - ac)*dconv*mu
             i = i + 1 if srx < dstx else i - 1
