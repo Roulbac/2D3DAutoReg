@@ -62,6 +62,27 @@ class Camera(object):
     def pos(self):
         return -self.r.T.dot(self.t)
 
+    def _make_cam_plot_fixed(self, fig, ax, suffix=''):
+        r = self._m[:3, :3]
+        pos = -r.T.dot(self._m[:3, 3])
+        u, v, w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
+        # Camera frame
+        ax.text(pos[0], pos[1], pos[2], 'Camera_{}'.format(suffix))
+        ax.plot3D([pos[0]], [pos[1]], [pos[2]], color='red', marker='*')
+        ax.plot3D([pos[0], pos[0] + u[0]],
+                  [pos[1], pos[1] + u[1]],
+                  [pos[2], pos[2] + u[2]],
+                  color='red')
+        ax.plot3D([pos[0], pos[0] + v[0]],
+                  [pos[1], pos[1] + v[1]],
+                  [pos[2], pos[2] + v[2]],
+                  color='green')
+        ax.plot3D([pos[0], pos[0] + w[0]],
+                  [pos[1], pos[1] + w[1]],
+                  [pos[2], pos[2] + w[2]],
+                  color='blue')
+        utils.set_axes_equal(ax)
+
     def _make_cam_plot(self, fig, ax, suffix=''):
         r, pos = self.r, self.pos
         u, v, w = 100*r[0, :], 100*r[1, :], 100*r[2, :]

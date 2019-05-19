@@ -119,15 +119,15 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_lab = QtWidgets.QLabel('Tx', self)
         self.ty_lab = QtWidgets.QLabel('Ty', self)
         self.tz_lab = QtWidgets.QLabel('Tz', self)
-        self.phi_lab = QtWidgets.QLabel('Phi', self)
-        self.theta_lab = QtWidgets.QLabel('Theta', self)
-        self.psi_lab = QtWidgets.QLabel('Psi', self)
+        self.rx_lab = QtWidgets.QLabel('Rx', self)
+        self.ry_lab = QtWidgets.QLabel('Ry', self)
+        self.rz_lab = QtWidgets.QLabel('Rz', self)
         self.tx_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.ty_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.tz_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.phi_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.theta_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
-        self.psi_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.rx_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.ry_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.rz_lab.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.tx_widg = QtWidgets.QDoubleSpinBox(self)
         self.ty_widg = QtWidgets.QDoubleSpinBox(self)
         self.tz_widg = QtWidgets.QDoubleSpinBox(self)
@@ -146,24 +146,24 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.editingFinished.connect(self.on_refresh_call)
         self.ty_widg.editingFinished.connect(self.on_refresh_call)
         self.tz_widg.editingFinished.connect(self.on_refresh_call)
-        self.phi_widg = QtWidgets.QDoubleSpinBox(self)
-        self.theta_widg = QtWidgets.QDoubleSpinBox(self)
-        self.psi_widg = QtWidgets.QDoubleSpinBox(self)
-        self.phi_widg.setKeyboardTracking(False)
-        self.theta_widg.setKeyboardTracking(False)
-        self.psi_widg.setKeyboardTracking(False)
-        self.phi_widg.setRange(-180, 180)
-        self.theta_widg.setRange(-180, 180)
-        self.psi_widg.setRange(-180, 180)
-        self.theta_widg.setSingleStep(5)
-        self.psi_widg.setSingleStep(5)
-        self.phi_widg.setSingleStep(5)
-        self.theta_widg.setDecimals(2)
-        self.psi_widg.setDecimals(2)
-        self.phi_widg.setDecimals(2)
-        self.phi_widg.editingFinished.connect(self.on_refresh_call)
-        self.theta_widg.editingFinished.connect(self.on_refresh_call)
-        self.psi_widg.editingFinished.connect(self.on_refresh_call)
+        self.rx_widg = QtWidgets.QDoubleSpinBox(self)
+        self.ry_widg = QtWidgets.QDoubleSpinBox(self)
+        self.rz_widg = QtWidgets.QDoubleSpinBox(self)
+        self.rx_widg.setKeyboardTracking(False)
+        self.ry_widg.setKeyboardTracking(False)
+        self.rz_widg.setKeyboardTracking(False)
+        self.rx_widg.setRange(-180, 180)
+        self.ry_widg.setRange(-180, 180)
+        self.rz_widg.setRange(-180, 180)
+        self.ry_widg.setSingleStep(5)
+        self.rz_widg.setSingleStep(5)
+        self.rx_widg.setSingleStep(5)
+        self.ry_widg.setDecimals(2)
+        self.rz_widg.setDecimals(2)
+        self.rx_widg.setDecimals(2)
+        self.rx_widg.editingFinished.connect(self.on_refresh_call)
+        self.ry_widg.editingFinished.connect(self.on_refresh_call)
+        self.rz_widg.editingFinished.connect(self.on_refresh_call)
         # Layout
         self.layout = QtWidgets.QGridLayout()
         self.layout.addWidget(self.alpha_slider, 0, 0, 1, 2)
@@ -174,12 +174,12 @@ class ParametersWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.tx_widg, 2, 0)
         self.layout.addWidget(self.ty_widg, 2, 1)
         self.layout.addWidget(self.tz_widg, 2, 2)
-        self.layout.addWidget(self.phi_lab, 4, 0, QtCore.Qt.AlignCenter)
-        self.layout.addWidget(self.theta_lab, 4, 1, QtCore.Qt.AlignCenter)
-        self.layout.addWidget(self.psi_lab, 4, 2, QtCore.Qt.AlignCenter)
-        self.layout.addWidget(self.phi_widg, 3, 0)
-        self.layout.addWidget(self.theta_widg, 3, 1)
-        self.layout.addWidget(self.psi_widg, 3, 2)
+        self.layout.addWidget(self.rx_lab, 4, 0, QtCore.Qt.AlignCenter)
+        self.layout.addWidget(self.ry_lab, 4, 1, QtCore.Qt.AlignCenter)
+        self.layout.addWidget(self.rz_lab, 4, 2, QtCore.Qt.AlignCenter)
+        self.layout.addWidget(self.rx_widg, 3, 0)
+        self.layout.addWidget(self.ry_widg, 3, 1)
+        self.layout.addWidget(self.rz_widg, 3, 2)
         self.setLayout(self.layout)
 
     @QtCore.Slot()
@@ -191,19 +191,19 @@ class ParametersWidget(QtWidgets.QWidget):
         params = [self.tx_widg.value(),
                   self.ty_widg.value(),
                   self.tz_widg.value(),
-                  self.phi_widg.value(),
-                  self.theta_widg.value(),
-                  self.psi_widg.value()]
+                  self.rx_widg.value(),
+                  self.ry_widg.value(),
+                  self.rz_widg.value()]
         return params
 
     def set_params(self, *params):
-        tx, ty, tz, phi, theta, psi = params
+        tx, ty, tz, rx, ry, rz = params
         self.tx_widg.setValue(tx)
         self.ty_widg.setValue(ty)
         self.tz_widg.setValue(tz)
-        self.phi_widg.setValue(phi)
-        self.theta_widg.setValue(theta)
-        self.psi_widg.setValue(psi)
+        self.rx_widg.setValue(rx)
+        self.ry_widg.setValue(ry)
+        self.rz_widg.setValue(rz)
 
 class MainWindow(QtWidgets.QMainWindow):
     new_ct = QtCore.Signal(list)

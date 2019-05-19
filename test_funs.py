@@ -1,3 +1,198 @@
+def test_camera_set_tfm_fixed():
+    import time
+    from camera import Camera
+    from camera_set import CameraSet
+    from utils import str_to_mat
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    m1 = str_to_mat('[-0.785341, -0.068020, -0.615313, -5.901115; 0.559239, 0.348323, -0.752279, -4.000824; 0.265498, -0.934903, -0.235514, -663.099792]')
+    m2 = str_to_mat('[-0.214846, 0.964454, 0.153853, 12.792526; 0.557581, 0.250463, -0.791436, -6.176056; -0.801838, -0.084251, -0.591572, -627.625305]')
+    k1 = str_to_mat('[3510.918213, 0.000000, 368.718994; 0.000000, 3511.775635, 398.527802; 0.000000, 0.000000, 1.000000]')
+    k2 = str_to_mat('[3533.860352, 0.000000, 391.703888; 0.000000, 3534.903809, 395.485229; 0.000000, 0.000000, 1.000000]')
+    cam1 = Camera(m=m1, k=k1)
+    cam2 = Camera(m=m2, k=k2)
+    camset = CameraSet(cam1, cam2)
+    center = camset.center
+    # Z rotations, i.e PSI from 0 to 360 degrees
+    plt.ion()
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    for rz in range(-180, 180, 1):
+        params = [0, 0, 0, 0, 0, rz]
+        camset.set_tfm_params(*params)
+        cam1._make_cam_plot_fixed(fig, ax, '1')
+        cam2._make_cam_plot_fixed(fig, ax, '2')
+        ax.text(center[0], center[1], center[2], 'Z rotation')
+        r = camset.tfm[:3, :3]
+        u, v ,w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
+        ax.plot3D([center[0], center[0] + u[0]],
+                  [center[1], center[1] + u[1]],
+                  [center[2], center[2] + u[2]],
+                  color='red')
+        ax.plot3D([center[0], center[0] + v[0]],
+                  [center[1], center[1] + v[1]],
+                  [center[2], center[2] + v[2]],
+                  color='green')
+        ax.plot3D([center[0], center[0] + w[0]],
+                  [center[1], center[1] + w[1]],
+                  [center[2], center[2] + w[2]],
+                  color='blue')
+        ax.set_xlim3d(center[0] - 600, center[0] + 600)
+        ax.set_ylim3d(center[1] - 600, center[1] + 600)
+        ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.001)
+        ax.clear()
+    for ry in range(-180, 180, 1):
+        params = [0, 0, 0, 0, ry, 0]
+        camset.set_tfm_params(*params)
+        cam1._make_cam_plot_fixed(fig, ax, '1')
+        cam2._make_cam_plot_fixed(fig, ax, '2')
+        ax.text(center[0], center[1], center[2], 'Y rotation')
+        r = camset.tfm[:3, :3]
+        u, v ,w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
+        ax.plot3D([center[0], center[0] + u[0]],
+                  [center[1], center[1] + u[1]],
+                  [center[2], center[2] + u[2]],
+                  color='red')
+        ax.plot3D([center[0], center[0] + v[0]],
+                  [center[1], center[1] + v[1]],
+                  [center[2], center[2] + v[2]],
+                  color='green')
+        ax.plot3D([center[0], center[0] + w[0]],
+                  [center[1], center[1] + w[1]],
+                  [center[2], center[2] + w[2]],
+                  color='blue')
+        ax.set_xlim3d(center[0] - 600, center[0] + 600)
+        ax.set_ylim3d(center[1] - 600, center[1] + 600)
+        ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.001)
+        ax.clear()
+    for rx in range(-180, 180, 1):
+        params = [0, 0, 0, rx, 0, 0]
+        camset.set_tfm_params(*params)
+        cam1._make_cam_plot_fixed(fig, ax, '1')
+        cam2._make_cam_plot_fixed(fig, ax, '2')
+        ax.text(center[0], center[1], center[2], 'X rotation')
+        r = camset.tfm[:3, :3]
+        u, v ,w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
+        ax.plot3D([center[0], center[0] + u[0]],
+                  [center[1], center[1] + u[1]],
+                  [center[2], center[2] + u[2]],
+                  color='red')
+        ax.plot3D([center[0], center[0] + v[0]],
+                  [center[1], center[1] + v[1]],
+                  [center[2], center[2] + v[2]],
+                  color='green')
+        ax.plot3D([center[0], center[0] + w[0]],
+                  [center[1], center[1] + w[1]],
+                  [center[2], center[2] + w[2]],
+                  color='blue')
+        ax.set_xlim3d(center[0] - 600, center[0] + 600)
+        ax.set_ylim3d(center[1] - 600, center[1] + 600)
+        ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.001)
+        ax.clear()
+    for tx in range(-100, 100, 5):
+        params = [tx, 0, 0, 0, 0, 0]
+        camset.set_tfm_params(*params)
+        cam1._make_cam_plot_fixed(fig, ax, '1')
+        cam2._make_cam_plot_fixed(fig, ax, '2')
+        r = camset.tfm[:3, :3]
+        u, v, w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
+        tx, ty, tz = camset.tfm[:3, 3]
+        ax.text(center[0] + tx, center[1] + ty, center[2] + tz, 'X translation')
+        ax.plot3D([center[0] + tx, center[0] + tx + u[0]],
+                  [center[1] + ty, center[1] + ty + u[1]],
+                  [center[2] + tz, center[2] + tz + u[2]],
+                  color='red')
+        ax.plot3D([center[0] + tx, center[0] + tx + v[0]],
+                  [center[1] + ty, center[1] + ty + v[1]],
+                  [center[2] + tz, center[2] + tz + v[2]],
+                  color='green')
+        ax.plot3D([center[0] + tx, center[0] + tx + w[0]],
+                  [center[1] + ty, center[1] + ty + w[1]],
+                  [center[2] + tz, center[2] + tz + w[2]],
+                  color='blue')
+        ax.set_xlim3d(center[0] - 600, center[0] + 600)
+        ax.set_ylim3d(center[1] - 600, center[1] + 600)
+        ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.001)
+        ax.clear()
+    for ty in range(-100, 100, 5):
+        params = [0, ty, 0, 0, 0, 0]
+        camset.set_tfm_params(*params)
+        cam1._make_cam_plot_fixed(fig, ax, '1')
+        cam2._make_cam_plot_fixed(fig, ax, '2')
+        r = camset.tfm[:3, :3]
+        u, v, w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
+        tx, ty, tz = camset.tfm[:3, 3]
+        ax.text(center[0] + tx, center[1] + ty, center[2] + tz, 'Y translation')
+        ax.plot3D([center[0] + tx, center[0] + tx + u[0]],
+                  [center[1] + ty, center[1] + ty + u[1]],
+                  [center[2] + tz, center[2] + tz + u[2]],
+                  color='red')
+        ax.plot3D([center[0] + tx, center[0] + tx + v[0]],
+                  [center[1] + ty, center[1] + ty + v[1]],
+                  [center[2] + tz, center[2] + tz + v[2]],
+                  color='green')
+        ax.plot3D([center[0] + tx, center[0] + tx + w[0]],
+                  [center[1] + ty, center[1] + ty + w[1]],
+                  [center[2] + tz, center[2] + tz + w[2]],
+                  color='blue')
+        ax.set_xlim3d(center[0] - 600, center[0] + 600)
+        ax.set_ylim3d(center[1] - 600, center[1] + 600)
+        ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.001)
+        ax.clear()
+    for tz in range(-100, 100, 5):
+        params = [0, 0, tz, 0, 0, 0]
+        camset.set_tfm_params(*params)
+        cam1._make_cam_plot_fixed(fig, ax, '1')
+        cam2._make_cam_plot_fixed(fig, ax, '2')
+        r = camset.tfm[:3, :3]
+        u, v, w = 100*r[0, :], 100*r[1, :], 100*r[2, :]
+        tx, ty, tz = camset.tfm[:3, 3]
+        ax.text(center[0] + tx, center[1] + ty, center[2] + tz, 'Z translation')
+        ax.plot3D([center[0] + tx, center[0] + tx + u[0]],
+                  [center[1] + ty, center[1] + ty + u[1]],
+                  [center[2] + tz, center[2] + tz + u[2]],
+                  color='red')
+        ax.plot3D([center[0] + tx, center[0] + tx + v[0]],
+                  [center[1] + ty, center[1] + ty + v[1]],
+                  [center[2] + tz, center[2] + tz + v[2]],
+                  color='green')
+        ax.plot3D([center[0] + tx, center[0] + tx + w[0]],
+                  [center[1] + ty, center[1] + ty + w[1]],
+                  [center[2] + tz, center[2] + tz + w[2]],
+                  color='blue')
+        ax.set_xlim3d(center[0] - 600, center[0] + 600)
+        ax.set_ylim3d(center[1] - 600, center[1] + 600)
+        ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.001)
+        ax.clear()
+
 def test_camera_set_tfm():
     import time
     from camera import Camera
@@ -18,36 +213,36 @@ def test_camera_set_tfm():
     plt.ion()
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    for psi in range(0, 360, 10):
-        params = [0, 0, 0, 0, 0, psi]
+    for rz in range(-180, 180, 5):
+         params = [0, 0, 0, 0, 0, rz]
+         camset.set_tfm_params(*params)
+         cam1._make_cam_plot(fig, ax, '1')
+         cam2._make_cam_plot(fig, ax, '2')
+         ax.text(center[0], center[1], center[2], 'Z rotation')
+         ax.plot3D([center[0], center[0] + 100],
+                   [center[1], center[1] +   0],
+                   [center[2], center[2] +   0],
+                   color='red')
+         ax.plot3D([center[0], center[0] +   0],
+                   [center[1], center[1] + 100],
+                   [center[2], center[2] +   0],
+                   color='green')
+         ax.plot3D([center[0], center[0] +   0],
+                   [center[1], center[1] +   0],
+                   [center[2], center[2] + 100],
+                   color='blue')
+         ax.set_xlim3d(center[0] - 600, center[0] + 600)
+         ax.set_ylim3d(center[1] - 600, center[1] + 600)
+         ax.set_zlim3d(center[2] - 600, center[2] + 600)
+         fig.canvas.draw()
+         fig.canvas.flush_events()
+         plt.pause(0.001)
+         ax.clear()
+    for ry in range(-180, 180, 5):
+        params = [0, 0, 0, 0, ry, 0]
         camset.set_tfm_params(*params)
-        cam1._make_cam_plot(fig, ax)
-        cam2._make_cam_plot(fig, ax)
-        ax.text(center[0], center[1], center[2], 'Z rotation')
-        ax.plot3D([center[0], center[0] + 100],
-                  [center[1], center[1] +   0],
-                  [center[2], center[2] +   0],
-                  color='red')
-        ax.plot3D([center[0], center[0] +   0],
-                  [center[1], center[1] + 100],
-                  [center[2], center[2] +   0],
-                  color='green')
-        ax.plot3D([center[0], center[0] +   0],
-                  [center[1], center[1] +   0],
-                  [center[2], center[2] + 100],
-                  color='blue')
-        ax.set_xlim3d(center[0] - 600, center[0] + 600)
-        ax.set_ylim3d(center[1] - 600, center[1] + 600)
-        ax.set_zlim3d(center[2] - 600, center[2] + 600)
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        plt.pause(0.001)
-        ax.clear()
-    for theta in range(0, 360, 10):
-        params = [0, 0, 0, 0, theta, 0]
-        camset.set_tfm_params(*params)
-        cam1._make_cam_plot(fig, ax)
-        cam2._make_cam_plot(fig, ax)
+        cam1._make_cam_plot(fig, ax, '1')
+        cam2._make_cam_plot(fig, ax, '2')
         ax.text(center[0], center[1], center[2], 'Y rotation')
         ax.plot3D([center[0], center[0] + 100],
                   [center[1], center[1] +   0],
@@ -68,11 +263,11 @@ def test_camera_set_tfm():
         fig.canvas.flush_events()
         plt.pause(0.001)
         ax.clear()
-    for phi in range(0, 360, 10):
-        params = [0, 0, 0, phi, 0, 0]
+    for rx in range(-180, 180, 5):
+        params = [0, 0, 0, rx, 0, 0]
         camset.set_tfm_params(*params)
-        cam1._make_cam_plot(fig, ax)
-        cam2._make_cam_plot(fig, ax)
+        cam1._make_cam_plot(fig, ax, '1')
+        cam2._make_cam_plot(fig, ax, '2')
         ax.text(center[0], center[1], center[2], 'X rotation')
         ax.plot3D([center[0], center[0] + 100],
                   [center[1], center[1] +   0],
@@ -111,16 +306,12 @@ def test_camera_set_tfm():
                   [center[1], center[1] +   0],
                   [center[2], center[2] + 100],
                   color='blue')
-        ax.plot3D([center[0] - camset.params[0]],
-                  [center[1] - camset.params[1]],
-                  [center[2] - camset.params[2]],
-                  marker='*', color='red')
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
         fig.canvas.draw()
         fig.canvas.flush_events()
-        plt.pause(0.001)
+        plt.pause(0.01)
         ax.clear()
     for ty in range(-100, 100, 5):
         params = [0, ty, 0, 0, 0, 0]
@@ -140,23 +331,19 @@ def test_camera_set_tfm():
                   [center[1], center[1] +   0],
                   [center[2], center[2] + 100],
                   color='blue')
-        ax.plot3D([center[0] - camset.params[0]],
-                  [center[1] - camset.params[1]],
-                  [center[2] - camset.params[2]],
-                  marker='*', color='red')
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
         fig.canvas.draw()
         fig.canvas.flush_events()
-        plt.pause(0.001)
+        plt.pause(0.01)
         ax.clear()
     for tz in range(-100, 100, 5):
         params = [0, 0, tz, 0, 0, 0]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot(fig, ax)
         cam2._make_cam_plot(fig, ax)
-        ax.text(center[0], center[1], center[2], 'X rotation')
+        ax.text(center[0], center[1], center[2], 'Z translation')
         ax.plot3D([center[0], center[0] + 100],
                   [center[1], center[1] +   0],
                   [center[2], center[2] +   0],
@@ -169,16 +356,12 @@ def test_camera_set_tfm():
                   [center[1], center[1] +   0],
                   [center[2], center[2] + 100],
                   color='blue')
-        ax.plot3D([center[0] - camset.params[0]],
-                  [center[1] - camset.params[1]],
-                  [center[2] - camset.params[2]],
-                  marker='*', color='red')
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
         fig.canvas.draw()
         fig.canvas.flush_events()
-        plt.pause(0.001)
+        plt.pause(0.01)
         ax.clear()
 
 def test_camera_set_pbyref():

@@ -10,23 +10,25 @@ class CameraSet(object):
         self.cam1 = cam1
         self.cam2 = cam2
         self.center = self._get_center(cam1, cam2)
-        # tx ty tz phi (x) theta (y) psi (x)
+        # tx ty tz rx (x) ry (y) rz (x)
         self.params = [0, 0, 0, 0, 0, 0]
         self.tfm = np.eye(4)
+
 
     def move_to(self, dst):
         tx = self.center[0] - dst[0]
         ty = self.center[1] - dst[1]
         tz = self.center[2] - dst[2]
-        phi = self.params[3]
-        theta = self.params[4]
-        psi = self.params[5]
-        self.set_tfm_params(tx, ty, tz, phi, theta, psi)
-        print(tx, ty, tz, phi, theta, psi)
+        rx = self.params[3]
+        ry = self.params[4]
+        rz = self.params[5]
+        self.set_tfm_params(tx, ty, tz, rx, ry, rz)
+        print(tx, ty, tz, rx, ry, rz)
 
     def set_tfm_params(self, *params):
         self.params = list(params)
-        r, t = CameraSet.params_to_mat(*params)
+        p, p_prime = self.make_p_pprime()
+        r, t = CameraSet.params_to_mat(p, p_prime, *params)
         self.set_centered_tfm(r, t)
 
     def set_centered_tfm(self, r, t):
@@ -46,25 +48,41 @@ class CameraSet(object):
     def rot_from_euler(angle, axis):
         r = np.eye(3)
         # PHI - X ; THETA - Y ; PSI - Z
-        if axis == 'phi':
+        if axis == 'rx':
             r[1:, 1:] = np.array([[np.cos(angle), -np.sin(angle)],
                                   [np.sin(angle), np.cos(angle)]])
-        elif axis == 'theta':
+        elif axis == 'ry':
             r[::2, ::2] = np.array([[np.cos(angle), np.sin(angle)],
                                   [-np.sin(angle), np.cos(angle)]])
-        elif axis == 'psi':
+        elif axis == 'rz':
             r[:2, :2] = np.array([[np.cos(angle), -np.sin(angle)],
                                   [np.sin(angle), np.cos(angle)]])
         return r
 
-    def params_to_mat(*params):
+    def make_p_pprime(self):
+        i = self.cam1._m[2, :3]/np.linalg.norm(self.cam1._m[2, :3])
+        j = self.cam2._m[2, :3]/np.linalg.norm(self.cam2._m[2, :3])
+        k = np.cross(i, j)
+        p = np.vstack([i, j, k]).T
+        p_prime = np.array([[1, -np.dot(i, j), 0],
+                            [0,             1, 0],
+                            [0,             0, 1]])
+        return p, p_prime
+
+    def make_ijk_rotation(p, p_prime, rx, ry, rz):
+        rrx = CameraSet.rot_from_euler(rx, 'rx')
+        rry = CameraSet.rot_from_euler(ry, 'ry')
+        rrz = CameraSet.rot_from_euler(rz, 'rz')
+        rrz = np.linalg.multi_dot([p_prime, rrz, np.linalg.inv(p_prime)])
+        rxyz = np.linalg.multi_dot([rrx, rry, rrz])
+        rijk = np.linalg.multi_dot([p, rxyz, np.linalg.inv(p)])
+        return rijk
+
+    def params_to_mat(p=np.eye(3), p_prime=np.eye(3), *params):
         t = np.array(params[:3])
-        phi, theta, psi = params[3:]
-        phi, theta, psi = phi*np.pi/180, theta*np.pi/180, psi*np.pi/180
-        rphi = CameraSet.rot_from_euler(phi, 'phi')
-        rtheta = CameraSet.rot_from_euler(theta, 'theta')
-        rpsi = CameraSet.rot_from_euler(psi, 'psi')
-        r = np.dot(rpsi, np.dot(rtheta, rphi))
+        rx, ry, rz = params[3:]
+        rx, ry, rz = rx*np.pi/180, ry*np.pi/180, rz*np.pi/180
+        r = CameraSet.make_ijk_rotation(p, p_prime, rx, ry, rz)
         return r, t
 
     def plot_camera_set(self):
