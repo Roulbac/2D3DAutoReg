@@ -65,12 +65,16 @@ class ImageWidget(QtWidgets.QLabel):
     @staticmethod
     def np_to_qrgb_pixmap(arr, color, alpha=0.5):
         h, w = arr.shape[0], arr.shape[1]
-        arr = (255*arr).astype(np.uint8).flatten()
+        arr = (255*arr).astype(np.uint8).flatten(order='F')
         qrgb_dict = {'r': lambda x: QtGui.qRgba(x, 0, 0, int(255*alpha)),
                      'g': lambda x: QtGui.qRgba(0, x, 0, int(255*alpha)),
                      'b': lambda x: QtGui.qRgba(0, 0, x, int(255*alpha))}
         colortable = [qrgb_dict[color](i) for i in range(256)]
-        img = QtGui.QImage(arr, w, h, w, QtGui.QImage.Format_Indexed8)
+        img = QtGui.QImage(
+            arr,
+            w, h,
+            h*np.nbytes[np.uint8],
+            QtGui.QImage.Format_Indexed8)
         img.setColorTable(colortable)
         return QtGui.QPixmap.fromImage(img)
 
