@@ -18,7 +18,7 @@ def test_camera_set_tfm_fixed():
     plt.ion()
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    for rz in range(-180, 180, 1):
+    for rz in range(-180, 180, 5):
         params = [0, 0, 0, 0, 0, rz]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot_fixed(fig, ax, '1')
@@ -45,7 +45,7 @@ def test_camera_set_tfm_fixed():
         fig.canvas.flush_events()
         plt.pause(0.001)
         ax.clear()
-    for ry in range(-180, 180, 1):
+    for ry in range(-180, 180, 5):
         params = [0, 0, 0, 0, ry, 0]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot_fixed(fig, ax, '1')
@@ -72,7 +72,7 @@ def test_camera_set_tfm_fixed():
         fig.canvas.flush_events()
         plt.pause(0.001)
         ax.clear()
-    for rx in range(-180, 180, 1):
+    for rx in range(-180, 180, 5):
         params = [0, 0, 0, rx, 0, 0]
         camset.set_tfm_params(*params)
         cam1._make_cam_plot_fixed(fig, ax, '1')
@@ -195,6 +195,7 @@ def test_camera_set_tfm_fixed():
 
 def test_camera_set_tfm():
     import time
+    import numpy as np
     from camera import Camera
     from camera_set import CameraSet
     from utils import str_to_mat
@@ -234,6 +235,13 @@ def test_camera_set_tfm():
          ax.set_xlim3d(center[0] - 600, center[0] + 600)
          ax.set_ylim3d(center[1] - 600, center[1] + 600)
          ax.set_zlim3d(center[2] - 600, center[2] + 600)
+         p1 = cam1.pos
+         p2 = cam2.pos
+         c = camset.center
+         verts = [c-(p1+p2), c-(p1-p2), c+(p1+p2), c+(p1-p2)]
+         verts = [list(map(lambda x: x.tolist(), verts))]
+         parallelogram = Poly3DCollection(verts)
+         ax.add_collection3d(parallelogram, zs='z')
          fig.canvas.draw()
          fig.canvas.flush_events()
          plt.pause(0.001)
@@ -259,6 +267,13 @@ def test_camera_set_tfm():
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        p1 = cam1.pos
+        p2 = cam2.pos
+        c = camset.center
+        verts = [c-(p1+p2), c-(p1-p2), c+(p1+p2), c+(p1-p2)]
+        verts = [list(map(lambda x: x.tolist(), verts))]
+        parallelogram = Poly3DCollection(verts)
+        ax.add_collection3d(parallelogram, zs='z')
         fig.canvas.draw()
         fig.canvas.flush_events()
         plt.pause(0.001)
@@ -284,6 +299,13 @@ def test_camera_set_tfm():
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        p1 = cam1.pos
+        p2 = cam2.pos
+        c = camset.center
+        verts = [c-(p1+p2), c-(p1-p2), c+(p1+p2), c+(p1-p2)]
+        verts = [list(map(lambda x: x.tolist(), verts))]
+        parallelogram = Poly3DCollection(verts)
+        ax.add_collection3d(parallelogram, zs='z')
         fig.canvas.draw()
         fig.canvas.flush_events()
         plt.pause(0.001)
@@ -291,8 +313,8 @@ def test_camera_set_tfm():
     for tx in range(-100, 100, 5):
         params = [tx, 0, 0, 0, 0, 0]
         camset.set_tfm_params(*params)
-        cam1._make_cam_plot(fig, ax)
-        cam2._make_cam_plot(fig, ax)
+        cam1._make_cam_plot(fig, ax, '1')
+        cam2._make_cam_plot(fig, ax, '2')
         ax.text(center[0], center[1], center[2], 'X translation')
         ax.plot3D([center[0], center[0] + 100],
                   [center[1], center[1] +   0],
@@ -309,6 +331,9 @@ def test_camera_set_tfm():
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        c = camset.center
+        t_c = np.linalg.inv(camset.tfm).dot(c.tolist() + [1])[:3]
+        ax.plot3D([t_c[0]], [t_c[1]], [t_c[2]], marker='*', color='red')
         fig.canvas.draw()
         fig.canvas.flush_events()
         plt.pause(0.01)
@@ -316,8 +341,8 @@ def test_camera_set_tfm():
     for ty in range(-100, 100, 5):
         params = [0, ty, 0, 0, 0, 0]
         camset.set_tfm_params(*params)
-        cam1._make_cam_plot(fig, ax)
-        cam2._make_cam_plot(fig, ax)
+        cam1._make_cam_plot(fig, ax, '1')
+        cam2._make_cam_plot(fig, ax, '2')
         ax.text(center[0], center[1], center[2], 'Y translation')
         ax.plot3D([center[0], center[0] + 100],
                   [center[1], center[1] +   0],
@@ -334,6 +359,9 @@ def test_camera_set_tfm():
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        c = camset.center
+        t_c = np.linalg.inv(camset.tfm).dot(c.tolist() + [1])[:3]
+        ax.plot3D([t_c[0]], [t_c[1]], [t_c[2]], marker='*', color='red')
         fig.canvas.draw()
         fig.canvas.flush_events()
         plt.pause(0.01)
@@ -341,8 +369,8 @@ def test_camera_set_tfm():
     for tz in range(-100, 100, 5):
         params = [0, 0, tz, 0, 0, 0]
         camset.set_tfm_params(*params)
-        cam1._make_cam_plot(fig, ax)
-        cam2._make_cam_plot(fig, ax)
+        cam1._make_cam_plot(fig, ax, '1')
+        cam2._make_cam_plot(fig, ax, '2')
         ax.text(center[0], center[1], center[2], 'Z translation')
         ax.plot3D([center[0], center[0] + 100],
                   [center[1], center[1] +   0],
@@ -359,6 +387,9 @@ def test_camera_set_tfm():
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
+        c = camset.center
+        t_c = np.linalg.inv(camset.tfm).dot(c.tolist() + [1])[:3]
+        ax.plot3D([t_c[0]], [t_c[1]], [t_c[2]], marker='*', color='red')
         fig.canvas.draw()
         fig.canvas.flush_events()
         plt.pause(0.01)
