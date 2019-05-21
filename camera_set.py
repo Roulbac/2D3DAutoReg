@@ -67,6 +67,7 @@ class CameraSet(object):
         p_prime = np.array([[1, -np.dot(i, j), 0],
                             [0,             1, 0],
                             [0,             0, 1]])
+        p_prime[:, 1] /= np.linalg.norm(p_prime[:, 1])
         return p, p_prime
 
     def make_ijk_rotation(p, p_prime, rx, ry, rz):
