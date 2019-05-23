@@ -64,8 +64,8 @@ class ImageWidget(QtWidgets.QLabel):
 
     @staticmethod
     def np_to_qrgb_pixmap(arr, color, alpha=0.5):
-        h, w = arr.shape[0], arr.shape[1]
-        arr = (255*arr).astype(np.uint8).flatten(order='F')
+        h, w = arr.shape
+        arr = (255*arr).astype(np.uint8).flatten(order='C')
         qrgb_dict = {'r': lambda x: QtGui.qRgba(x, 0, 0, int(255*alpha)),
                      'g': lambda x: QtGui.qRgba(0, x, 0, int(255*alpha)),
                      'b': lambda x: QtGui.qRgba(0, 0, x, int(255*alpha))}
@@ -73,7 +73,7 @@ class ImageWidget(QtWidgets.QLabel):
         img = QtGui.QImage(
             arr,
             w, h,
-            h*np.nbytes[np.uint8],
+            w*np.nbytes[np.uint8],
             QtGui.QImage.Format_Indexed8)
         img.setColorTable(colortable)
         return QtGui.QPixmap.fromImage(img)
@@ -85,6 +85,11 @@ class ImageWidget(QtWidgets.QLabel):
         painter.begin(pm)
         # Draw overlay
         painter.drawPixmap(0, 0, self.base)
+        # Overlay is in xy coords where x is from top to bottom and y from left to right
+        # Default QPainter is x from left to right and y from top to bottom (inverted)
+        # Set xy inversion transform for overlay painting
+        transform = QtGui.QTransform(0, 1, 1, 0, 0, 0)
+        painter.setTransform(transform)
         painter.drawPixmap(0, 0, overlay)
         painter.end()
         self.setPixmap(pm)
