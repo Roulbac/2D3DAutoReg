@@ -6,14 +6,16 @@ from camera import Camera
 from utils import recons_DLT
 
 class CameraSet(object):
-    def __init__(self, cam1, cam2):
-        self.cam1 = cam1
-        self.cam2 = cam2
-        self.center = self._get_center(cam1, cam2)
+    def __init__(self):
         # tx ty tz rx (x) ry (y) rz (x)
+        self.cam1, self.cam2, self.center = None, None, None
         self.params = [0, 0, 0, 0, 0, 0]
         self.tfm = np.eye(4)
 
+    def set_cams(self, cam1, cam2):
+        self.cam1 = cam1
+        self.cam2 = cam2
+        self.center = self._get_center(cam1, cam2)
 
     def move_to(self, dst):
         tx = self.center[0] - dst[0]

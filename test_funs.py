@@ -8,8 +8,8 @@ def test_drr_registration():
     from utils import read_rho, str_to_mat
     xray1 = Image.open('Test_Data/Sawbones_L2L3/0.bmp').convert('L')
     xray2 = Image.open('Test_Data/Sawbones_L2L3/90.bmp').convert('L')
-    xray1 = np.array(xray1).astype(np.float32).T
-    xray2 = np.array(xray2).astype(np.float32).T
+    xray1 = np.array(xray1).astype(np.float32)
+    xray2 = np.array(xray2).astype(np.float32)
     xray1 = (xray1-xray1.min())/(xray1.max()-xray1.min())
     xray2 = (xray2-xray2.min())/(xray2.max()-xray2.min())
     m1 = str_to_mat('[-0.785341, -0.068020, -0.615313, -5.901115; 0.559239, 0.348323, -0.752279, -4.000824; 0.265498, -0.934903, -0.235514, -663.099792]')

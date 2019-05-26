@@ -1,4 +1,5 @@
 import numpy as np
+from PIL import Image
 import SimpleITK as sitk
 from skimage import filters, measure, transform
 
@@ -49,6 +50,10 @@ def read_rho(fpath):
     sp = np.array(im.GetSpacing(), dtype=np.float32)
     rho = sitk.GetArrayFromImage(im).transpose((2, 1, 0)).astype(np.float32)
     return rho, sp
+
+def read_image_as_np(fpath):
+    im = Image.open(fpath).convert('L')
+    return np.array(im).astype(np.float32)
 
 def make_xray_mask(xray):
     smoothed = filters.gaussian(xray, sigma=30)

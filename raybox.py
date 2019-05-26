@@ -177,8 +177,8 @@ class RayBox(object):
         d_cams = []
         for cam in cams:
             # Convert to device variables and allocate if necessary
-            d_h, d_w = np.int32(cam.h), np.int32(cam.w), np.int32(cam.z_sign)
-            d_z_sign, d_down = np.int32(cam.Z_SIGN), np.bool(d_down)
+            d_h, d_w = np.int32(cam.h), np.int32(cam.w)
+            d_z_sign, d_down = np.int32(cam.Z_SIGN), np.bool(cam.DOWN)
             d_kinv = cuda.mem_alloc(cam.kinv.size * np.nbytes[np.float32])
             d_minv = cuda.mem_alloc(cam.minv.size * np.nbytes[np.float32])
             d_src = cuda.mem_alloc(cam.pos.size * np.nbytes[np.float32])

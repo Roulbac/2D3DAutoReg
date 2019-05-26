@@ -5,7 +5,8 @@ from PySide2 import QtCore, QtGui, QtWidgets
 from raybox import RayBox
 from camera import Camera
 from drr_set import DrrSet
-from utils import str_to_mat, read_rho
+from drr_registration import DrrRegistration
+from utils import str_to_mat, read_rho, read_image_as_np
 
 
 class RecenterWidget(QtWidgets.QWidget):
@@ -266,8 +267,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.drr2.connect(self.img2_widg.on_drr)
         # Logic
         self.raybox = RayBox()
-        self.drr_set = None
+        self.drr_set = DrrSet(self.raybox)
+        self.drr_registration = DrrRegistration(self.drr_set)
         runoptim_action = QtWidgets.QAction('Run Optimizer', self)
+        runoptim_action.triggered.connect(self.on_runoptim_action)
         self.edit_menu.addAction(runoptim_action)
         popup_3d_action = QtWidgets.QAction('Pop up 3D visualizer', self)
         self.edit_menu.addAction(popup_3d_action)
@@ -276,6 +279,16 @@ class MainWindow(QtWidgets.QMainWindow):
         gpu_mode_action.setCheckable(True)
         gpu_mode_action.toggled.connect(self.on_toggled_gpu_mode)
         self.edit_menu.addAction(gpu_mode_action)
+
+    @QtCore.Slot()
+    def on_runoptim_action(self):
+        params = np.array(self.params_widg.get_params())
+        res = self.drr_registration.register(params)
+        print(res)
+        new_params = res.x.tolist()
+        self.params_widg.set_params(*new_params)
+        self.drr_set.set_tfm_params(*new_params)
+        self.draw_drrs()
 
     @QtCore.Slot(bool)
     def on_toggled_gpu_mode(self, checked):
@@ -323,12 +336,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.file_dialog.exec_():
             fpaths = self.file_dialog.selectedFiles()
             self.fd_in_out['X-Ray Files'][1] = fpaths
+            xray1 = read_image_as_np(fpaths[0])
+            xray2 = read_image_as_np(fpaths[1])
+            self.drr_registration.set_xrays(xray1, xray2)
             self.base_pixmap_1.emit(QtGui.QPixmap(fpaths[0]))
             self.base_pixmap_2.emit(QtGui.QPixmap(fpaths[1]))
 
     @QtCore.Slot()
     def on_refresh_butn(self):
-        # TODO: Make DrrSet clas including camera set and raybox
         params = self.params_widg.get_params()
         self.drr_set.set_tfm_params(*params)
         self.draw_drrs()
@@ -357,7 +372,7 @@ class MainWindow(QtWidgets.QMainWindow):
         k2 = str_to_mat(re.search('K = \[(.*)\]', s2).group(1))
         cam1 = Camera(m=m1, k=k1, h=768, w=768)
         cam2 = Camera(m=m2, k=k2, h=768, w=768)
-        self.drr_set = DrrSet(cam1, cam2, self.raybox)
+        self.drr_set.set_cams(cam1, cam2)
         print('Set cams')
 
 

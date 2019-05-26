@@ -32,7 +32,7 @@ __global__ void backprojectPixel(
     if (down == true) {
         int temp = i;
         i = j;
-        j = i;
+        j = temp;
     }
     if (threadId < h*w)
     {
