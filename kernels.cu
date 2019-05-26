@@ -10,7 +10,7 @@ __constant__ float MU_AIR = 0.0007937816;
 __global__ void backprojectPixel(
     const int h, const int w, float * dsts,
     const float * minv, const float * kinv,
-    const int z_sign, const float sid)
+    const int z_sign, const bool down, const float sid)
 {
     int blockId = blockIdx.x + blockIdx.y*gridDim.x;
     int localId = (threadIdx.y*blockDim.x) + threadIdx.x;
@@ -29,6 +29,11 @@ __global__ void backprojectPixel(
 
     int i = threadId / w;
     int j = threadId % w;
+    if (down == true) {
+        int temp = i;
+        i = j;
+        j = i;
+    }
     if (threadId < h*w)
     {
         float dotx = sid*z_sign*(sKinv[0]*i + sKinv[1]*j + sKinv[2]*1);
