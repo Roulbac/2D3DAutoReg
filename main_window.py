@@ -111,7 +111,6 @@ class ImageWidget(QtWidgets.QLabel):
         self.blend_with_base(overlay)
 
 class ParametersWidget(QtWidgets.QWidget):
-    refresh_params = QtCore.Signal(list)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -135,9 +134,6 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg = QtWidgets.QDoubleSpinBox(self)
         self.ty_widg = QtWidgets.QDoubleSpinBox(self)
         self.tz_widg = QtWidgets.QDoubleSpinBox(self)
-        self.tx_widg.setKeyboardTracking(False)
-        self.ty_widg.setKeyboardTracking(False)
-        self.tz_widg.setKeyboardTracking(False)
         self.tx_widg.setRange(-3E10, 3E10)
         self.ty_widg.setRange(-3E10, 3E10)
         self.tz_widg.setRange(-3E10, 3E10)
@@ -147,15 +143,9 @@ class ParametersWidget(QtWidgets.QWidget):
         self.tx_widg.setDecimals(2)
         self.ty_widg.setDecimals(2)
         self.tz_widg.setDecimals(2)
-        self.tx_widg.editingFinished.connect(self.on_refresh_call)
-        self.ty_widg.editingFinished.connect(self.on_refresh_call)
-        self.tz_widg.editingFinished.connect(self.on_refresh_call)
         self.rx_widg = QtWidgets.QDoubleSpinBox(self)
         self.ry_widg = QtWidgets.QDoubleSpinBox(self)
         self.rz_widg = QtWidgets.QDoubleSpinBox(self)
-        self.rx_widg.setKeyboardTracking(False)
-        self.ry_widg.setKeyboardTracking(False)
-        self.rz_widg.setKeyboardTracking(False)
         self.rx_widg.setRange(-180, 180)
         self.ry_widg.setRange(-180, 180)
         self.rz_widg.setRange(-180, 180)
@@ -165,9 +155,6 @@ class ParametersWidget(QtWidgets.QWidget):
         self.ry_widg.setDecimals(2)
         self.rz_widg.setDecimals(2)
         self.rx_widg.setDecimals(2)
-        self.rx_widg.editingFinished.connect(self.on_refresh_call)
-        self.ry_widg.editingFinished.connect(self.on_refresh_call)
-        self.rz_widg.editingFinished.connect(self.on_refresh_call)
         # Layout
         self.layout = QtWidgets.QGridLayout()
         self.layout.addWidget(self.alpha_slider, 0, 0, 1, 2)
@@ -185,11 +172,6 @@ class ParametersWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.ry_widg, 3, 1)
         self.layout.addWidget(self.rz_widg, 3, 2)
         self.setLayout(self.layout)
-
-    @QtCore.Slot()
-    def on_refresh_call(self):
-        params = self.get_params()
-        self.refresh_params.emit(params)
 
     def get_params(self):
         params = [self.tx_widg.value(),
@@ -274,7 +256,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # Connect signals and slots
         self.base_pixmap_1.connect(self.img1_widg.on_base_pixmap)
         self.base_pixmap_2.connect(self.img2_widg.on_base_pixmap)
-        self.params_widg.refresh_params.connect(self.on_new_params)
         self.params_widg.alpha_slider.valueChanged.connect(self.on_alphaslider_update)
         self.refresh_butn.released.connect(self.on_refresh_butn)
         self.threshold_widg.new_threshold.connect(self.on_new_threshold)
@@ -339,11 +320,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.camera_set.move_to(np.array(center))
         self.params_widg.set_params(*(self.camera_set.params))
 
-    @QtCore.Slot(list)
-    def on_new_params(self, params):
-        self.camera_set.set_tfm_params(*params)
-        self.draw_drrs()
-
     @QtCore.Slot(int)
     def on_alphaslider_update(self, val):
         alpha = val / 100
@@ -380,6 +356,8 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot()
     def on_refresh_butn(self):
         # TODO: Make DrrSet clas including camera set and raybox
+        params = self.params_widg.get_params()
+        self.camera_set.set_tfm_params(*params)
         self.draw_drrs()
 
     def draw_drrs(self):
