@@ -1,3 +1,31 @@
+def test_drr_registration():
+    import numpy as np
+    from PIL import Image
+    from camera import Camera
+    from raybox import RayBox
+    from drr_set import DrrSet
+    from drr_registration import DrrRegistration
+    from utils import read_rho, str_to_mat
+    xray1 = Image.open('Test_Data/Sawbones_L2L3/0.bmp').convert('L')
+    xray2 = Image.open('Test_Data/Sawbones_L2L3/90.bmp').convert('L')
+    xray1 = np.array(xray1).astype(np.float32).T
+    xray2 = np.array(xray2).astype(np.float32).T
+    xray1 = (xray1-xray1.min())/(xray1.max()-xray1.min())
+    xray2 = (xray2-xray2.min())/(xray2.max()-xray2.min())
+    m1 = str_to_mat('[-0.785341, -0.068020, -0.615313, -5.901115; 0.559239, 0.348323, -0.752279, -4.000824; 0.265498, -0.934903, -0.235514, -663.099792]')
+    m2 = str_to_mat('[-0.214846, 0.964454, 0.153853, 12.792526; 0.557581, 0.250463, -0.791436, -6.176056; -0.801838, -0.084251, -0.591572, -627.625305]')
+    k1 = str_to_mat('[3510.918213, 0.000000, 368.718994; 0.000000, 3511.775635, 398.527802; 0.000000, 0.000000, 1.000000]')
+    k2 = str_to_mat('[3533.860352, 0.000000, 391.703888; 0.000000, 3534.903809, 395.485229; 0.000000, 0.000000, 1.000000]')
+    cam1, cam2 = Camera(m1, k1), Camera(m2, k2)
+    raybox = RayBox('cpu')
+    rho, sp = read_rho('Test_Data/Sawbones_L2L3/sawbones.nii.gz')
+    raybox.set_rho(rho, sp)
+    drr_set = DrrSet(cam1, cam2, raybox)
+    drr_registration = DrrRegistration(xray1, xray2, drr_set)
+    res = drr_registration.register(np.array([-98.92, -106.0, -185.0, -35.0, 25.0, 175]))
+    print(res)
+
+
 def test_camera_set_tfm_fixed():
     import time
     from camera import Camera

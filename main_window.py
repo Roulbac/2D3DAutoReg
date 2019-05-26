@@ -85,11 +85,6 @@ class ImageWidget(QtWidgets.QLabel):
         painter.begin(pm)
         # Draw overlay
         painter.drawPixmap(0, 0, self.base)
-        # Overlay is in xy coords where x is from top to bottom and y from left to right
-        # Default QPainter is x from left to right and y from top to bottom (inverted)
-        # Set xy inversion transform for overlay painting
-        transform = QtGui.QTransform(0, 1, 1, 0, 0, 0)
-        painter.setTransform(transform)
         painter.drawPixmap(0, 0, overlay)
         painter.end()
         self.setPixmap(pm)
@@ -384,6 +379,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_refresh_butn(self):
+        # TODO: Make DrrSet clas including camera set and raybox
         self.draw_drrs()
 
     def draw_drrs(self):

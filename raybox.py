@@ -2,6 +2,7 @@ import math
 import numpy as np
 from numba import jit
 from utils import read_rho, recons_DLT
+
 try:
     import pycuda.driver as cuda
     import pycuda.autoinit
@@ -19,7 +20,7 @@ EPS_FLOAT32 = 2.22045e-016
 
 class RayBox(object):
 
-    def __init__(self, mode='cpu', threshold=300, sid=1001):
+    def __init__(self, mode='cpu', threshold=500, sid=1001):
         self._mode = mode
         self.cams = []
         self.d_cams = []
@@ -34,7 +35,7 @@ class RayBox(object):
             source_str = f.read()
         self.cumod = SourceModule(source_str)
         self.f_backproj = self.cumod.get_function('backprojectPixel')
-        self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i', 'f'])
+        self.f_backproj.prepare(['i', 'i', 'P', 'P', 'P', 'i', '?', 'f'])
         self.f_trace = self.cumod.get_function('traceRay')
         self.f_trace.prepare(['P', 'P', 'P', 'P', 'P', 'P', 'P', 'i', 'i', 'f'])
 
@@ -103,7 +104,7 @@ class RayBox(object):
         for cam in self.cams:
             camargs.append(
                 (cam.h, cam.w, cam.minv.flatten(),
-                 cam.kinv.flatten(), cam.pos, cam.z_sign))
+                 cam.kinv.flatten(), cam.pos, cam.Z_SIGN, cam.DOWN))
         # Args is a list of tuples for each cam
         return RayBox._jit_trace_rays(
             self.n, self.sp, self.b,
@@ -124,11 +125,14 @@ class RayBox(object):
     def _jit_trace_rays(n, sp, b, rho, threshold, camargs, sid):
         all_raysums = []
         for arg in camargs:
-            h, w, minv, kinv, pos, z_sign = arg
+            h, w, minv, kinv, pos, z_sign, down = arg
             dsts = np.zeros(h*w*3, dtype=np.float32)
             raysums = np.zeros(h*w, dtype=np.float32)
             for idx in range(h*w):
-                i, j = idx // w, idx % w
+                if down == 1:
+                    j, i = idx // w, idx % w
+                else:
+                    i, j = idx // w, idx % w
                 dsts[3*idx:3*idx+3] = _cpu_backproject_pixel(
                     h, w, minv, kinv,
                     z_sign, i, j, sid
@@ -173,7 +177,8 @@ class RayBox(object):
         d_cams = []
         for cam in cams:
             # Convert to device variables and allocate if necessary
-            d_h, d_w, d_z_sign = np.int32(cam.h), np.int32(cam.w), np.int32(cam.z_sign)
+            d_h, d_w = np.int32(cam.h), np.int32(cam.w), np.int32(cam.z_sign)
+            d_z_sign, d_down = np.int32(cam.Z_SIGN), np.bool(d_down)
             d_kinv = cuda.mem_alloc(cam.kinv.size * np.nbytes[np.float32])
             d_minv = cuda.mem_alloc(cam.minv.size * np.nbytes[np.float32])
             d_src = cuda.mem_alloc(cam.pos.size * np.nbytes[np.float32])
@@ -183,7 +188,7 @@ class RayBox(object):
             cuda.memcpy_htod(d_kinv, cam.kinv.flatten().astype(np.float32))
             # Save pointers to camera and variables
             d_cams.append(
-                (cam, d_h, d_w, d_z_sign, d_kinv,
+                (cam, d_h, d_w, d_z_sign, d_down, d_kinv,
                  d_minv, d_src, d_dsts, d_raysums)
             )
         self.d_cams = d_cams
@@ -191,7 +196,7 @@ class RayBox(object):
     def _cu_trace_rays(self):
         all_raysums = []
         for d_cam in self.d_cams:
-            cam, d_h, d_w, d_z_sign, d_kinv, d_minv, d_src, d_dsts, d_raysums = d_cam
+            cam, d_h, d_w, d_z_sign, d_down, d_kinv, d_minv, d_src, d_dsts, d_raysums = d_cam
             cuda.memcpy_htod(d_src, cam.pos.astype(np.float32))
             cuda.memcpy_htod(d_minv, cam.minv.flatten().astype(np.float32))
             cuda.memcpy_htod(d_kinv, cam.kinv.flatten().astype(np.float32))
@@ -199,7 +204,7 @@ class RayBox(object):
             grid = (math.ceil(d_h/block[0]), math.ceil(d_w/block[0]))
             self.f_backproj.prepared_call(
                 grid, block, d_h, d_w, d_dsts,
-                d_minv, d_kinv, d_z_sign, self.sid
+                d_minv, d_kinv, d_z_sign, d_down, self.sid
             )
             self.f_trace.prepared_call(
                 grid, block, d_src, d_dsts, d_raysums,

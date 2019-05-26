@@ -17,6 +17,8 @@ class Camera(object):
     # -1 if scene is negative z
     # +1 if scene is on positive z
     Z_SIGN = -1
+    # 1 if down vector is y, 0 if x
+    DOWN = 1
 
     def __init__(self, m=np.eye(4), k=np.eye(3, 4), h=768, w=768):
         self.h, self.w = h, w
@@ -31,10 +33,6 @@ class Camera(object):
     @property
     def m(self):
         return np.dot(self._m, self.tfm)
-
-    @property
-    def z_sign(self):
-        return np.int32(Camera.Z_SIGN)
 
     @property
     def minv(self):

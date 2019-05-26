@@ -1,5 +1,6 @@
 import numpy as np
 import SimpleITK as sitk
+from skimage import filters, measure, transform
 
 def set_axes_radius(ax, origin, radius):
     ax.set_xlim3d([origin[0] - radius, origin[0] + radius])
@@ -48,5 +49,12 @@ def read_rho(fpath):
     sp = np.array(im.GetSpacing(), dtype=np.float32)
     rho = sitk.GetArrayFromImage(im).transpose((2, 1, 0)).astype(np.float32)
     return rho, sp
+
+def make_xray_mask(xray):
+    smoothed = filters.gaussian(xray, sigma=30)
+    avg_block = measure.block_reduce(smoothed, (32, 32), np.mean)
+    avg_block = transform.rescale(avg_block, 32, multichannel=False)
+    return avg_block > 0.05
+
 
 
