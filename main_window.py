@@ -4,7 +4,7 @@ import numpy as np
 from PySide2 import QtCore, QtGui, QtWidgets
 from raybox import RayBox
 from camera import Camera
-from camera_set import CameraSet
+from drr_set import DrrSet
 from utils import str_to_mat, read_rho
 
 
@@ -266,7 +266,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.drr2.connect(self.img2_widg.on_drr)
         # Logic
         self.raybox = RayBox()
-        self.camera_set = None
+        self.drr_set = None
         runoptim_action = QtWidgets.QAction('Run Optimizer', self)
         self.edit_menu.addAction(runoptim_action)
         popup_3d_action = QtWidgets.QAction('Pop up 3D visualizer', self)
@@ -276,33 +276,6 @@ class MainWindow(QtWidgets.QMainWindow):
         gpu_mode_action.setCheckable(True)
         gpu_mode_action.toggled.connect(self.on_toggled_gpu_mode)
         self.edit_menu.addAction(gpu_mode_action)
-        # Debug stuff
-        # b = np.array([-3, -2, 0], dtype=np.float32)
-        # n = np.array([3, 3, 3], dtype=np.int32)
-        # sp = np.array([1, 1, 1], dtype=np.float32)
-        # rho = np.ones((n - 1).tolist(), dtype=np.float32)
-        # self.raybox.set_rho(rho, b, n, sp)
-        # h, w = 768, 768
-        # k = np.array([[2 * (h / 2), 0, 1 * (h / 2), 0],
-        #               [0, 2 * (w / 2), 1 * (w / 2), 0],
-        #               [0, 0, 1, 0]])
-        # m1 = np.array([[1, 0, 0, 2],
-        #                [0, 0, -1, 1],
-        #                [0, 1, 0, -4],
-        #                [0, 0, 0, 1]])
-        # m2 = np.array([[0, -1, 0, -1],
-        #                [0, 0, -1, 1],
-        #                [1, 0, 0, -3],
-        #                [0, 0, 0, 1]])
-        # cam1 = Camera(m=m1, k=k, h=h, w=w)
-        # cam2 = Camera(m=m2, k=k, h=h, w=w)
-        # self.raybox.set_cams(cam1, cam2)
-        # pm1 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/L4L5_0.BMP')
-        # pm2 = QtGui.QPixmap('/Users/reda/Desktop/Work/MSc/Projects/drr/drr_AP.bmp')
-        # self.img1_widg.base = pm1
-        # self.img2_widg.base = pm2
-        # self.img1_widg.setPixmap(pm1)
-        # self.img2_widg.setPixmap(pm2)
 
     @QtCore.Slot(bool)
     def on_toggled_gpu_mode(self, checked):
@@ -313,12 +286,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def plot_set(self):
-        self.camera_set.plot_camera_set()
+        self.drr_set.plot_camera_set()
 
     @QtCore.Slot(list)
     def on_new_center(self, center):
-        self.camera_set.move_to(np.array(center))
-        self.params_widg.set_params(*(self.camera_set.params))
+        self.drr_set.move_to(np.array(center))
+        self.params_widg.set_params(*(self.drr_set.params))
 
     @QtCore.Slot(int)
     def on_alphaslider_update(self, val):
@@ -357,7 +330,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_refresh_butn(self):
         # TODO: Make DrrSet clas including camera set and raybox
         params = self.params_widg.get_params()
-        self.camera_set.set_tfm_params(*params)
+        self.drr_set.set_tfm_params(*params)
         self.draw_drrs()
 
     def draw_drrs(self):
@@ -384,8 +357,7 @@ class MainWindow(QtWidgets.QMainWindow):
         k2 = str_to_mat(re.search('K = \[(.*)\]', s2).group(1))
         cam1 = Camera(m=m1, k=k1, h=768, w=768)
         cam2 = Camera(m=m2, k=k2, h=768, w=768)
-        self.camera_set = CameraSet(cam1, cam2)
-        self.raybox.set_cams(cam1, cam2)
+        self.drr_set = DrrSet(cam1, cam2, self.raybox)
         print('Set cams')
 
 
