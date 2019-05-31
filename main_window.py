@@ -1,6 +1,7 @@
 import sys
 import re
 import numpy as np
+import matplotlib.pyplot as plt
 from PySide2 import QtCore, QtGui, QtWidgets
 from raybox import RayBox
 from camera import Camera
@@ -352,6 +353,8 @@ class MainWindow(QtWidgets.QMainWindow):
         drr1, drr2 = self.raybox.trace_rays()
         drr1 = (1-drr1)
         drr2 = (1-drr2)
+        plt.imsave('drr1.png', drr1, cmap='gray')
+        plt.imsave('drr2.png', drr2, cmap='gray')
         print('DRR')
         self.drr1.emit(drr1)
         self.drr2.emit(drr2)

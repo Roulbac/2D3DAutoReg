@@ -100,14 +100,6 @@ class Camera(object):
                   [pos[1], pos[1] + w[1]],
                   [pos[2], pos[2] + w[2]],
                   color='blue')
-        #ax.set_xlabel('X')
-        #ax.set_ylabel('Y')
-        #ax.set_zlabel('Z')
-        #ax.grid(False)
-        # ax.set_xticks([])
-        # ax.set_yticks([])
-        # ax.set_zticks([])
-        utils.set_axes_equal(ax)
 
     def get_focalplane_pt(self, x):
         assert isinstance(x, (list, tuple))
