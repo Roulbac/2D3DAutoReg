@@ -58,8 +58,8 @@ class ThresholdWidget(QtWidgets.QWidget):
 class ImageWidget(QtWidgets.QLabel):
     def __init__(self, parent):
         super().__init__(parent)
-        self.base = None
-        self.drr = None
+        self.base = QtGui.QPixmap()
+        self.drr = QtGui.QPixmap()
         self.alpha = 0.5
         self.setScaledContents(True)
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
@@ -351,8 +351,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def draw_drrs(self):
         drr1, drr2 = self.raybox.trace_rays()
-        drr1 = (1-drr1)
-        drr2 = (1-drr2)
+        drr1 = (1 - drr1)
+        drr2 = (1 - drr2)
         plt.imsave('drr1.png', drr1, cmap='gray')
         plt.imsave('drr2.png', drr2, cmap='gray')
         print('DRR')
@@ -369,12 +369,16 @@ class MainWindow(QtWidgets.QMainWindow):
             s1 = f.read()
         with open(fpaths[1]) as f:
             s2 = f.read()
-        m1 = str_to_mat(re.search('M = \[(.*)\]', s1).group(1))
-        k1 = str_to_mat(re.search('K = \[(.*)\]', s1).group(1))
+        m1 = str_to_mat(re.search('[Mm]\s*=\s*\[(.*)\]', s1).group(1))
+        k1 = str_to_mat(re.search('[Kk]\s*=\s*\[(.*)\]', s1).group(1))
+        h1 = int(re.search('[Hh]\s*=\s*([0-9]+)', s1).group(1))
+        w1 = int(re.search('[Ww]\s*=\s*([0-9]+)', s1).group(1))
         m2 = str_to_mat(re.search('M = \[(.*)\]', s2).group(1))
         k2 = str_to_mat(re.search('K = \[(.*)\]', s2).group(1))
-        cam1 = Camera(m=m1, k=k1, h=768, w=768)
-        cam2 = Camera(m=m2, k=k2, h=768, w=768)
+        h2 = int(re.search('[Hh]\s*=\s*([0-9]+)', s2).group(1))
+        w2 = int(re.search('[Ww]\s*=\s*([0-9]+)', s2).group(1))
+        cam1 = Camera(m=m1, k=k1, h=h1, w=w1)
+        cam2 = Camera(m=m2, k=k2, h=h2, w=w2)
         self.drr_set.set_cams(cam1, cam2)
         print('Set cams')
 
