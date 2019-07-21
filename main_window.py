@@ -59,7 +59,9 @@ class ImageWidget(QtWidgets.QLabel):
     def __init__(self, parent):
         super().__init__(parent)
         self.base = QtGui.QPixmap()
-        self.drr = QtGui.QPixmap()
+        self.overlay = QtGui.QPixmap()
+        self.setPixmap(self.base)
+        self.drr = None
         self.alpha = 0.5
         self.setScaledContents(True)
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
@@ -80,37 +82,47 @@ class ImageWidget(QtWidgets.QLabel):
         img.setColorTable(colortable)
         return QtGui.QPixmap.fromImage(img)
 
-    def blend_with_base(self, overlay):
+    def set_base(self, base):
+        self.base = base
+        pm = QtGui.QPixmap(base.size())
+        pm.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter()
+        painter.begin(pm)
+        painter.drawPixmap(0, 0, base)
+        if not self.overlay.isNull():
+            painter.drawPixmap(0, 0, self.overlay)
+        painter.end()
+        self.setPixmap(pm)
+
+    def set_overlay(self, overlay):
+        self.overlay = overlay
         pm = QtGui.QPixmap(overlay.size())
         pm.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter()
         painter.begin(pm)
         # Draw overlay
-        painter.drawPixmap(0, 0, self.base)
+        if not self.base.isNull():
+            painter.drawPixmap(0, 0, self.base)
         painter.drawPixmap(0, 0, overlay)
         painter.end()
         self.setPixmap(pm)
 
     @QtCore.Slot(QtGui.QPixmap)
     def on_base_pixmap(self, base):
-        self.base = base
-        self.setPixmap(base)
+        self.set_base(base)
 
     @QtCore.Slot(float)
     def on_alpha(self, alpha):
         if self.drr is not None:
             self.alpha = alpha
             overlay = ImageWidget.np_to_qrgb_pixmap(self.drr, 'r', alpha)
-            overlay = overlay.scaled(self.base.size(), QtCore.Qt.IgnoreAspectRatio)
-            self.setPixmap(self.base)
-            self.blend_with_base(overlay)
+            self.set_overlay(overlay)
 
     @QtCore.Slot(np.ndarray)
     def on_drr(self, drr):
         self.drr = drr
         overlay = self.np_to_qrgb_pixmap(drr, 'r', self.alpha)
-        overlay = overlay.scaled(self.base.size(), QtCore.Qt.IgnoreAspectRatio)
-        self.blend_with_base(overlay)
+        self.set_overlay(overlay)
 
 class ParametersWidget(QtWidgets.QWidget):
 
