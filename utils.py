@@ -32,6 +32,13 @@ def str_to_mat(x):
     x = x.strip('[]')
     return np.vstack(list(map(lambda x: np.array(x.split(','), dtype=float), x.split(';'))))
 
+def mat_to_str(x):
+    s = '['
+    for row in x:
+        s += np.array2string(row, separator=',').strip('[]') + ';'
+    s += ']'
+    return s
+
 def recons_DLT(x1, x2, p1, p2):
     p1, p2 = p1.flatten(), p2.flatten()
     a = np.array([[p1[0] - x1[0]*p1[8], p1[1] - x1[0]*p1[9], p1[2] - x1[0]*p1[10]],

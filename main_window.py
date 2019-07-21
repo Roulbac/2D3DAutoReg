@@ -1,4 +1,5 @@
 import sys
+import os
 import re
 import numpy as np
 import matplotlib.pyplot as plt
@@ -230,12 +231,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.fd_in_out = {
             'CT': [self.on_ct_menu, ''],
             'Camera Files': [self.on_cam_menu, ''],
-            'X-Ray Files': [self.on_xray_menu, '']
+            'C-Arm Images': [self.on_carm_menu, '']
         }
-        for entry in ['CT', 'Camera Files', 'X-Ray Files']:
+        for entry in ['CT', 'Camera Files', 'C-Arm Images']:
             action = QtWidgets.QAction('Open {}'.format(entry), self)
             action.triggered.connect(self.fd_in_out[entry][0])
             self.file_menu.addAction(action)
+        export_action = QtWidgets.QAction('Export current configuration', self)
+        export_action.triggered.connect(self.on_export_config)
+        self.file_menu.addAction(export_action)
         self.edit_menu = self.menu.addMenu('Edit')
         # Status bar
         self.status_bar = self.statusBar()
@@ -294,6 +298,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.edit_menu.addAction(gpu_mode_action)
 
     @QtCore.Slot()
+    def on_export_config(self):
+        parent_dir = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(parent_dir, 'current_config.txt'), 'w') as f:
+            params_str = 'Tx = {:.4f}\nTy = {:.4f}\nTz = {:.4f}\nRx = {:.4f}\nRy = {:.4f}\nRz = {:.4f}'.format(
+                self.drr_set.params[0],
+                self.drr_set.params[1],
+                self.drr_set.params[2],
+                self.drr_set.params[3],
+                self.drr_set.params[4],
+                self.drr_set.params[5]
+            )
+            f.write(params_str)
+        plt.imsave(os.path.join(parent_dir, 'drr1.png'), self.img1_widg.drr, cmap='gray')
+        plt.imsave(os.path.join(parent_dir, 'drr2.png'), self.img2_widg.drr, cmap='gray')
+
+    @QtCore.Slot()
     def on_runoptim_action(self):
         params = np.array(self.params_widg.get_params())
         res = self.drr_registration.register(params)
@@ -345,10 +365,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.init_cams_from_path(fpaths)
 
     @QtCore.Slot()
-    def on_xray_menu(self):
+    def on_carm_menu(self):
         if self.file_dialog.exec_():
             fpaths = self.file_dialog.selectedFiles()
-            self.fd_in_out['X-Ray Files'][1] = fpaths
+            self.fd_in_out['C-Arm Images'][1] = fpaths
             xray1 = read_image_as_np(fpaths[0])
             xray2 = read_image_as_np(fpaths[1])
             self.drr_registration.set_xrays(xray1, xray2)

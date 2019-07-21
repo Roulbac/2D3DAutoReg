@@ -111,3 +111,8 @@ class Camera(object):
         ax = fig.gca(projection='3d')
         self._make_cam_plot(fig, ax)
         plt.show()
+
+    def get_params_string(self):
+        m, k = utils.mat_to_str(self.m), utils.mat_to_str(self.k)
+        h, w = str(self.h), str(self.w)
+        return 'M = {}\nK = {}\nH = {}\nW = {}'.format(m, k, h, w)
