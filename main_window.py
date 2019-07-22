@@ -1,5 +1,4 @@
 import sys
-import os
 import re
 import numpy as np
 import matplotlib.pyplot as plt
@@ -222,7 +221,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.central_widg = QtWidgets.QWidget(self)
         # File dialog
         self.file_dialog = QtWidgets.QFileDialog()
-        self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles)
         self.file_dialog.setViewMode(QtWidgets.QFileDialog.List)
         self.file_dialog_out = ''
         # Menu
@@ -237,9 +235,15 @@ class MainWindow(QtWidgets.QMainWindow):
             action = QtWidgets.QAction('Open {}'.format(entry), self)
             action.triggered.connect(self.fd_in_out[entry][0])
             self.file_menu.addAction(action)
-        export_action = QtWidgets.QAction('Export current configuration', self)
-        export_action.triggered.connect(self.on_export_config)
-        self.file_menu.addAction(export_action)
+        save_drr1_action = QtWidgets.QAction('Save first DRR as ...', self)
+        save_drr1_action.triggered.connect(self.on_save_drr1)
+        self.file_menu.addAction(save_drr1_action)
+        save_drr2_action = QtWidgets.QAction('Save second DRR as ...', self)
+        save_drr2_action.triggered.connect(self.on_save_drr2)
+        self.file_menu.addAction(save_drr2_action)
+        save_params_action = QtWidgets.QAction('Save parameters as ...', self)
+        save_params_action.triggered.connect(self.on_save_params)
+        self.file_menu.addAction(save_params_action)
         self.edit_menu = self.menu.addMenu('Edit')
         # Status bar
         self.status_bar = self.statusBar()
@@ -298,20 +302,41 @@ class MainWindow(QtWidgets.QMainWindow):
         self.edit_menu.addAction(gpu_mode_action)
 
     @QtCore.Slot()
-    def on_export_config(self):
-        parent_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(parent_dir, 'current_config.txt'), 'w') as f:
-            params_str = 'Tx = {:.4f}\nTy = {:.4f}\nTz = {:.4f}\nRx = {:.4f}\nRy = {:.4f}\nRz = {:.4f}'.format(
-                self.drr_set.params[0],
-                self.drr_set.params[1],
-                self.drr_set.params[2],
-                self.drr_set.params[3],
-                self.drr_set.params[4],
-                self.drr_set.params[5]
-            )
-            f.write(params_str)
-        plt.imsave(os.path.join(parent_dir, 'drr1.png'), self.img1_widg.drr, cmap='gray')
-        plt.imsave(os.path.join(parent_dir, 'drr2.png'), self.img2_widg.drr, cmap='gray')
+    def on_save_params(self):
+        # TODO: Save each drr separately and config file too
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.AnyFile)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+        self.file_dialog.setNameFilter('Text Files (*.txt)')
+        if self.file_dialog.exec_():
+            fpath = self.file_dialog.selectedFiles()[0]
+            with open(fpath, 'w') as f:
+                params_str = 'Tx = {:.4f}\nTy = {:.4f}\nTz = {:.4f}\nRx = {:.4f}\nRy = {:.4f}\nRz = {:.4f}'.format(
+                    self.drr_set.params[0],
+                    self.drr_set.params[1],
+                    self.drr_set.params[2],
+                    self.drr_set.params[3],
+                    self.drr_set.params[4],
+                    self.drr_set.params[5]
+                )
+                f.write(params_str)
+
+    @QtCore.Slot()
+    def on_save_drr1(self):
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.AnyFile)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+        self.file_dialog.setNameFilter('Image Files (*.png)')
+        if self.file_dialog.exec_():
+            fpath = self.file_dialog.selectedFiles()[0]
+            plt.imsave(fpath, self.img1_widg.drr, cmap='gray')
+
+    @QtCore.Slot()
+    def on_save_drr2(self):
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.AnyFile)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+        self.file_dialog.setNameFilter('Image Files (*.png)')
+        if self.file_dialog.exec_():
+            fpath = self.file_dialog.selectedFiles()[0]
+            plt.imsave(fpath, self.img2_widg.drr, cmap='gray')
 
     @QtCore.Slot()
     def on_runoptim_action(self):
@@ -351,6 +376,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_ct_menu(self):
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
         if self.file_dialog.exec_():
             fpaths = self.file_dialog.selectedFiles()
             self.fd_in_out['CT'][1] = fpaths
@@ -358,6 +385,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_cam_menu(self):
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
         if self.file_dialog.exec_():
             fpaths = self.file_dialog.selectedFiles()
             self.fd_in_out['Camera Files'][1] = fpaths
@@ -366,6 +395,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_carm_menu(self):
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
         if self.file_dialog.exec_():
             fpaths = self.file_dialog.selectedFiles()
             self.fd_in_out['C-Arm Images'][1] = fpaths
