@@ -115,7 +115,7 @@ class ImageWidget(QtWidgets.QLabel):
     def on_alpha(self, alpha):
         if self.drr is not None:
             self.alpha = alpha
-            overlay = ImageWidget.np_to_qrgb_pixmap(self.drr, 'r', alpha)
+            overlay = ImageWidget.np_to_qrgb_pixmap(1 - self.drr, 'r', alpha)
             self.set_overlay(overlay)
 
     @QtCore.Slot(np.ndarray)
