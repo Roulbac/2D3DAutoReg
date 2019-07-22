@@ -88,9 +88,9 @@ class CameraSet(object):
         r = CameraSet.make_ijk_rotation(p, p_prime, rx, ry, rz)
         return r, t
 
-    def plot_camera_set(self, fig, ax):
-        # fig = plt.figure()
-        # ax = fig.gca(projection='3d')
+    def plot_camera_set(self):
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
         self.cam1._make_cam_plot(fig, ax, suffix='1')
         self.cam2._make_cam_plot(fig, ax, suffix='2')
         ax.set_xlabel('X')
@@ -120,5 +120,5 @@ class CameraSet(object):
         ax.set_xlim3d(center[0] - 600, center[0] + 600)
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
-        #plt.show(block=False)
+        plt.show(block=False)
 

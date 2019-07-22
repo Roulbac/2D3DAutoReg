@@ -121,7 +121,7 @@ class ImageWidget(QtWidgets.QLabel):
     @QtCore.Slot(np.ndarray)
     def on_drr(self, drr):
         self.drr = drr
-        overlay = self.np_to_qrgb_pixmap(drr, 'r', self.alpha)
+        overlay = self.np_to_qrgb_pixmap(1 - drr, 'r', self.alpha)
         self.set_overlay(overlay)
 
 class ParametersWidget(QtWidgets.QWidget):
@@ -327,7 +327,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_dialog.setNameFilter('Image Files (*.png)')
         if self.file_dialog.exec_():
             fpath = self.file_dialog.selectedFiles()[0]
-            plt.imsave(fpath, self.img1_widg.drr, cmap='gray')
+            plt.imsave(fpath, self.img1_widg.drr, cmap='gray', vmin=0, vmax=1)
 
     @QtCore.Slot()
     def on_save_drr2(self):
@@ -336,7 +336,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.file_dialog.setNameFilter('Image Files (*.png)')
         if self.file_dialog.exec_():
             fpath = self.file_dialog.selectedFiles()[0]
-            plt.imsave(fpath, self.img2_widg.drr, cmap='gray')
+            plt.imsave(fpath, self.img2_widg.drr, cmap='gray', vmin=0, vmax=1)
 
     @QtCore.Slot()
     def on_runoptim_action(self):
@@ -414,10 +414,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def draw_drrs(self):
         drr1, drr2 = self.raybox.trace_rays()
-        drr1 = (1 - drr1)
-        drr2 = (1 - drr2)
-        plt.imsave('drr1.png', drr1, cmap='gray')
-        plt.imsave('drr2.png', drr2, cmap='gray')
         print('DRR')
         self.drr1.emit(drr1)
         self.drr2.emit(drr2)
