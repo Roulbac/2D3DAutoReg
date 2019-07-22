@@ -38,12 +38,12 @@ class DrrRegistration(object):
 
     def register(self,
                  x0,
-                 xtol=1e-10,
-                 ftol=1-10):
+                 xtol=1e-6,
+                 ftol=1e-6):
         return minimize(
             self.objective_function,
             x0,
             method=self.optimizer,
             callback=self.optimizer_callback,
-            options=dict(disp=True)
+            options=dict(xtol=xtol, ftol=ftol, disp=True)
         )
