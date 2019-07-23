@@ -125,6 +125,7 @@ class ImageWidget(QtWidgets.QLabel):
         self.set_overlay(overlay)
 
 class ParametersWidget(QtWidgets.QWidget):
+    params_edited = QtCore.Signal()
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -169,6 +170,13 @@ class ParametersWidget(QtWidgets.QWidget):
         self.ry_widg.setDecimals(2)
         self.rz_widg.setDecimals(2)
         self.rx_widg.setDecimals(2)
+        # Connect change signal
+        self.tx_widg.editingFinished.connect(self.on_editingfinish)
+        self.ty_widg.editingFinished.connect(self.on_editingfinish)
+        self.tz_widg.editingFinished.connect(self.on_editingfinish)
+        self.rx_widg.editingFinished.connect(self.on_editingfinish)
+        self.ry_widg.editingFinished.connect(self.on_editingfinish)
+        self.rz_widg.editingFinished.connect(self.on_editingfinish)
         # Layout
         self.layout = QtWidgets.QGridLayout()
         self.layout.addWidget(self.alpha_slider, 0, 0, 1, 2)
@@ -186,6 +194,10 @@ class ParametersWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.ry_widg, 3, 1)
         self.layout.addWidget(self.rz_widg, 3, 2)
         self.setLayout(self.layout)
+
+    @QtCore.Slot(float)
+    def on_editingfinish(self):
+        self.params_edited.emit()
 
     def get_params(self):
         params = [self.tx_widg.value(),
@@ -252,6 +264,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.img2_widg = ImageWidget(self.central_widg)
         # Parameter widgs
         self.params_widg = ParametersWidget(self.central_widg)
+        self.params_widg.params_edited.connect(self.on_refresh)
         # Threshold widg
         self.threshold_widg = ThresholdWidget(self.central_widg)
         # Refresh button
@@ -279,7 +292,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.base_pixmap_1.connect(self.img1_widg.on_base_pixmap)
         self.base_pixmap_2.connect(self.img2_widg.on_base_pixmap)
         self.params_widg.alpha_slider.valueChanged.connect(self.on_alphaslider_update)
-        self.refresh_butn.released.connect(self.on_refresh_butn)
+        self.refresh_butn.released.connect(self.on_refresh_btn)
         self.threshold_widg.new_threshold.connect(self.on_new_threshold)
         self.recenter_widg.new_center.connect(self.on_new_center)
         self.alpha.connect(self.img1_widg.on_alpha)
@@ -300,10 +313,21 @@ class MainWindow(QtWidgets.QMainWindow):
         gpu_mode_action.setCheckable(True)
         gpu_mode_action.toggled.connect(self.on_toggled_gpu_mode)
         self.edit_menu.addAction(gpu_mode_action)
+        self.autorefresh = False
+        autorefresh_action = QtWidgets.QAction('Auto refresh', self)
+        autorefresh_action.setCheckable(True)
+        autorefresh_action.toggled.connect(self.on_autorefresh_toggle)
+        self.edit_menu.addAction(autorefresh_action)
+
+    @QtCore.Slot(bool)
+    def on_autorefresh_toggle(self, checked):
+        if checked:
+            self.autorefresh = True
+        else:
+            self.autorefresh = False
 
     @QtCore.Slot()
     def on_save_params(self):
-        # TODO: Save each drr separately and config file too
         self.file_dialog.setFileMode(QtWidgets.QFileDialog.AnyFile)
         self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
         self.file_dialog.setNameFilter('Text Files (*.txt)')
@@ -407,7 +431,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.base_pixmap_2.emit(QtGui.QPixmap(fpaths[1]))
 
     @QtCore.Slot()
-    def on_refresh_butn(self):
+    def on_refresh(self):
+        if self.autorefresh:
+            params = self.params_widg.get_params()
+            self.drr_set.set_tfm_params(*params)
+            self.draw_drrs()
+
+    @QtCore.Slot()
+    def on_refresh_btn(self):
         params = self.params_widg.get_params()
         self.drr_set.set_tfm_params(*params)
         self.draw_drrs()
