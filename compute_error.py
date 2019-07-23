@@ -58,9 +58,13 @@ if __name__ == '__main__':
         s = f.read()
         fiducials = str_to_mat(s).T
         fiducials = np.vstack((fiducials, np.ones(fiducials.shape[1])))
-    diff_tfm = np.dot(camera_set_gt.tfm, np.linalg.inv(camera_set_reg.tfm))
-    errors = diff_tfm.dot(fiducials)
-    errors = np.linalg.norm(errors[:3, :]/errors[3, :], axis=1)
+    # Fiducial coords are in gt and registered space
+    # Transform them back to original ijk CT space and compute error
+    gt_fiducials = np.linalg.inv(camera_set_gt.tfm).dot(fiducials)
+    gt_fiducials = gt_fiducials[:3, :] / gt_fiducials[3, :]
+    reg_fiducials = np.linalg.inv(camera_set_reg.tfm).dot(fiducials)
+    reg_fiducials = reg_fiducials[:3, :] / reg_fiducials[3, :]
+    errors = np.linalg.norm(gt_fiducials - reg_fiducials, axis=1)
     print('Errors')
     print(errors)
     print('Mean {}, Std {}'.format(errors.mean(), errors.std()))
