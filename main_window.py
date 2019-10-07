@@ -56,15 +56,28 @@ class ThresholdWidget(QtWidgets.QWidget):
 
 
 class ImageWidget(QtWidgets.QLabel):
+    clicked = QtCore.Signal(float, float)
+    moved = QtCore.Signal(float, float)
+    released = QtCore.Signal()
+    roi_select = QtCore.Signal(float, float, float, float)
+
     def __init__(self, parent):
         super().__init__(parent)
         self.base = QtGui.QPixmap()
         self.overlay = QtGui.QPixmap()
+        self.roi = QtGui.QPixmap()
         self.setPixmap(self.base)
         self.drr = None
         self.alpha = 0.5
         self.setScaledContents(True)
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.roi_enabled = False
+        self.is_selecting_roi = False
+        self.a, self.b, self.c, self.d = -1, -1, -1, -1
+        self.roi_select.connect(self.on_roi_select)
+        self.clicked.connect(self.on_clicked)
+        self.moved.connect(self.on_moved)
+        self.released.connect(self.on_released)
 
     @staticmethod
     def np_to_qrgb_pixmap(arr, color, alpha=0.5):
@@ -91,19 +104,40 @@ class ImageWidget(QtWidgets.QLabel):
         painter.drawPixmap(0, 0, base)
         if not self.overlay.isNull():
             painter.drawPixmap(0, 0, self.overlay)
+        if not self.roi.isNull():
+            painter.drawPixmap(0, 0, self.roi)
         painter.end()
         self.setPixmap(pm)
 
     def set_overlay(self, overlay):
         self.overlay = overlay
-        pm = QtGui.QPixmap(overlay.size())
+        if not self.base.isNull():
+            pm = QtGui.QPixmap(self.base.size())
+        else:
+            pm = QtGui.QPixmap(overlay.size())
         pm.fill(QtCore.Qt.GlobalColor.transparent)
         painter = QtGui.QPainter()
         painter.begin(pm)
         # Draw overlay
         if not self.base.isNull():
             painter.drawPixmap(0, 0, self.base)
+        if not self.roi.isNull():
+            painter.drawPixmap(0, 0, self.roi)
         painter.drawPixmap(0, 0, overlay)
+        painter.end()
+        self.setPixmap(pm)
+
+    def set_roi(self, roi):
+        self.roi = roi
+        pm = QtGui.QPixmap(self.base.size())
+        pm.fill(QtCore.Qt.GlobalColor.transparent)
+        painter = QtGui.QPainter()
+        painter.begin(pm)
+        if not self.base.isNull():
+            painter.drawPixmap(0, 0, self.base)
+        if not self.overlay.isNull():
+            painter.drawPixmap(0, 0, self.overlay)
+        painter.drawPixmap(0, 0, roi)
         painter.end()
         self.setPixmap(pm)
 
@@ -123,6 +157,72 @@ class ImageWidget(QtWidgets.QLabel):
         self.drr = drr
         overlay = self.np_to_qrgb_pixmap(1 - drr, 'r', self.alpha)
         self.set_overlay(overlay)
+
+    @QtCore.Slot(float, float, float, float)
+    def on_roi_select(self, a, b, c, d):
+        """on_roi_select
+
+        :param a: Top left x
+        :param b: Top left y
+        :param c: Bottom right x
+        :param d: Bottoom right y
+        """
+
+        w, h = self.base.size().toTuple()
+        roi_arr = np.ones((h, w))
+        start_dim1, end_dim1 = min(int(b*h), int(d*h)), max(int(b*h), int(d*h))
+        start_dim2, end_dim2 = min(int(a*w), int(c*w)), max(int(a*w), int(c*w))
+        roi_arr[start_dim1:end_dim1, start_dim2:end_dim2] = 0
+        roi_arr = roi_arr.astype(np.uint8).flatten(order='C')
+        colortable = [QtGui.qRgba(0, 0, 0, int(255*x)) for x in range(2)]
+        img = QtGui.QImage(
+            roi_arr,
+            w, h,
+            w*np.nbytes[np.uint8],
+            QtGui.QImage.Format_Indexed8
+        )
+        img.setColorTable(colortable)
+        roi = QtGui.QPixmap.fromImage(img)
+        self.set_roi(roi)
+
+    def mousePressEvent(self, event):
+        w, h = self.frameSize().toTuple()
+        x, y = event.x(), event.y()
+        if 0 <= x/w <= 1 and 0 <= y/h <= 1:
+            self.clicked.emit(x/w, y/h)
+        QtWidgets.QLabel.mousePressEvent(self, event)
+
+    def mouseReleaseEvent(self, event):
+        self.released.emit()
+        QtWidgets.QLabel.mouseReleaseEvent(self, event)
+
+    def mouseMoveEvent(self, event):
+        w, h = self.frameSize().toTuple()
+        x, y = event.x(), event.y()
+        self.moved.emit(min(max(x/w, 0.0), 1.0), min(max(y/h, 0.0), 1.0))
+        QtWidgets.QLabel.mouseMoveEvent(self, event)
+
+    @QtCore.Slot(float, float)
+    def on_clicked(self, x, y):
+        if self.roi_enabled:
+            self.a, self.b = x, y
+            self.is_selecting_roi = True
+
+    @QtCore.Slot(float, float)
+    def on_moved(self, x, y):
+        if self.roi_enabled and self.is_selecting_roi and abs(x-self.a) > 0.05 and abs(y - self.b) > 0.05:
+            self.c, self.d = x, y
+            self.roi_select.emit(self.a, self.b, self.c, self.d)
+
+    @QtCore.Slot()
+    def on_released(self):
+        if self.roi_enabled and self.is_selecting_roi:
+            self.is_selecting_roi = False
+
+    @QtCore.Slot(bool)
+    def on_enable_roi(self, flag):
+        self.roi_enabled = flag
+
 
 class ParametersWidget(QtWidgets.QWidget):
     params_edited = QtCore.Signal()
@@ -318,6 +418,11 @@ class MainWindow(QtWidgets.QMainWindow):
         autorefresh_action.setCheckable(True)
         autorefresh_action.toggled.connect(self.on_autorefresh_toggle)
         self.edit_menu.addAction(autorefresh_action)
+        roiselection_action = QtWidgets.QAction('Enable ROI selection', self)
+        roiselection_action.setCheckable(True)
+        roiselection_action.toggled.connect(self.img1_widg.on_enable_roi)
+        roiselection_action.toggled.connect(self.img2_widg.on_enable_roi)
+        self.edit_menu.addAction(roiselection_action)
 
     @QtCore.Slot(bool)
     def on_autorefresh_toggle(self, checked):
@@ -400,6 +505,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_ct_menu(self):
+        self.file_dialog.setNameFilter('Any files (*)')
         self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles)
         self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
         if self.file_dialog.exec_():
@@ -409,6 +515,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_cam_menu(self):
+        self.file_dialog.setNameFilter('Text Files (*.txt)')
         self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles)
         self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
         if self.file_dialog.exec_():
@@ -419,6 +526,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @QtCore.Slot()
     def on_carm_menu(self):
+        self.file_dialog.setNameFilter('Image Files (*.png, *.bmp)')
         self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFiles)
         self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
         if self.file_dialog.exec_():
