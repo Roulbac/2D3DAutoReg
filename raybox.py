@@ -1,7 +1,6 @@
 import math
 import numpy as np
 from numba import jit
-from utils import read_rho, recons_DLT
 
 try:
     import pycuda.driver as cuda
@@ -93,9 +92,10 @@ class RayBox(object):
             all_raysums = self._cpu_trace_rays()
             hws = [(cam.h, cam.w) for cam in self.cams]
         for i in range(len(all_raysums)):
+            # If the camera's down flag is 1, produced images are reshaped to hw shape
+            # with i's in rows, j's in colums, i.e x[j,i] is the pixel at pos (i,j)
             all_raysums[i] = all_raysums[i].reshape(hws[i], order='C')
         return all_raysums
-
 
     # -------------------- PRIVATE CPU FUNCTIONS ----------------------
 

@@ -60,6 +60,7 @@ class ImageWidget(QtWidgets.QLabel):
     moved = QtCore.Signal(float, float)
     released = QtCore.Signal()
     roi_select = QtCore.Signal(float, float, float, float)
+    roi_finalize = QtCore.Signal(float, float, float, float)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -135,9 +136,9 @@ class ImageWidget(QtWidgets.QLabel):
         painter.begin(pm)
         if not self.base.isNull():
             painter.drawPixmap(0, 0, self.base)
+        painter.drawPixmap(0, 0, roi)
         if not self.overlay.isNull():
             painter.drawPixmap(0, 0, self.overlay)
-        painter.drawPixmap(0, 0, roi)
         painter.end()
         self.setPixmap(pm)
 
@@ -188,8 +189,7 @@ class ImageWidget(QtWidgets.QLabel):
     def mousePressEvent(self, event):
         w, h = self.frameSize().toTuple()
         x, y = event.x(), event.y()
-        if 0 <= x/w <= 1 and 0 <= y/h <= 1:
-            self.clicked.emit(x/w, y/h)
+        self.clicked.emit(x/w, y/h)
         QtWidgets.QLabel.mousePressEvent(self, event)
 
     def mouseReleaseEvent(self, event):
@@ -204,7 +204,7 @@ class ImageWidget(QtWidgets.QLabel):
 
     @QtCore.Slot(float, float)
     def on_clicked(self, x, y):
-        if self.roi_enabled:
+        if 0 <= x <= 1 and 0 <= y <= 1 and self.roi_enabled:
             self.a, self.b = x, y
             self.is_selecting_roi = True
 
@@ -218,6 +218,7 @@ class ImageWidget(QtWidgets.QLabel):
     def on_released(self):
         if self.roi_enabled and self.is_selecting_roi:
             self.is_selecting_roi = False
+            self.roi_finalize.emit(self.a, self.b, self.c, self.d)
 
     @QtCore.Slot(bool)
     def on_enable_roi(self, flag):
@@ -399,6 +400,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.alpha.connect(self.img2_widg.on_alpha)
         self.drr1.connect(self.img1_widg.on_drr)
         self.drr2.connect(self.img2_widg.on_drr)
+        self.img1_widg.roi_finalize.connect(self.on_roi_finalize_1)
+        self.img2_widg.roi_finalize.connect(self.on_roi_finalize_2)
         # Logic
         self.raybox = RayBox()
         self.drr_set = DrrSet(self.raybox)
@@ -579,6 +582,14 @@ class MainWindow(QtWidgets.QMainWindow):
         cam2 = Camera(m=m2, k=k2, h=h2, w=w2)
         self.drr_set.set_cams(cam1, cam2)
         print('Set cams')
+
+    @QtCore.Slot(float, float, float, float)
+    def on_roi_finalize_1(self, a, b, c, d):
+        self.drr_registration.mask1 = (a, b, c, d)
+
+    @QtCore.Slot(float, float, float, float)
+    def on_roi_finalize_2(self, a, b, c, d):
+        self.drr_registration.mask2 = (a, b, c, d)
 
 
 if __name__ == '__main__':
