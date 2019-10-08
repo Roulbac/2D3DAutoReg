@@ -357,6 +357,9 @@ class MainWindow(QtWidgets.QMainWindow):
         save_params_action = QtWidgets.QAction('Save parameters as ...', self)
         save_params_action.triggered.connect(self.on_save_params)
         self.file_menu.addAction(save_params_action)
+        save_setup_action = QtWidgets.QAction('Save current setup as ...', self)
+        save_setup_action.triggered.connect(self.on_save_setup)
+        self.file_menu.addAction(save_setup_action)
         self.edit_menu = self.menu.addMenu('Edit')
         # Status bar
         self.status_bar = self.statusBar()
@@ -433,6 +436,29 @@ class MainWindow(QtWidgets.QMainWindow):
             self.autorefresh = True
         else:
             self.autorefresh = False
+
+    @QtCore.Slot()
+    def on_save_setup(self):
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.AnyFile)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+        self.file_dialog.setNameFilter('Any files (*)')
+        if self.file_dialog.exec_():
+            fpath = self.file_dialog.selectedFiles()[0]
+            fpath_params = '{}.txt'.format(fpath)
+            fpath_drr1 = '{}_drr1.png'.format(fpath)
+            fpath_drr2 = '{}_drr2.png'.format(fpath)
+            with open(fpath_params, 'w') as f:
+                params_str = 'Tx = {:.4f}\nTy = {:.4f}\nTz = {:.4f}\nRx = {:.4f}\nRy = {:.4f}\nRz = {:.4f}'.format(
+                    self.drr_set.params[0],
+                    self.drr_set.params[1],
+                    self.drr_set.params[2],
+                    self.drr_set.params[3],
+                    self.drr_set.params[4],
+                    self.drr_set.params[5]
+                )
+                f.write(params_str)
+            plt.imsave(fpath_drr1, self.img1_widg.drr, cmap='gray', vmin=0, vmax=1)
+            plt.imsave(fpath_drr2, self.img2_widg.drr, cmap='gray', vmin=0, vmax=1)
 
     @QtCore.Slot()
     def on_save_params(self):
