@@ -67,7 +67,7 @@ if __name__ == '__main__':
         h2 = int(re.search('[Hh]\s*=\s*([0-9]+)', s).group(1))
         w2 = int(re.search('[Ww]\s*=\s*([0-9]+)', s).group(1))
         cam2 = Camera(m=m2, k=k2, h=h2, w=w2)
-    camera_set.set_cams(cam1, cam2)
+    camera_set.set_cams(*[cam1, cam2])
     with open(args.params1, 'r') as f:
         s = f.read()
         tx = float(re.search('Tx\s*=\s*([-+]?[0-9]*\.?[0-9]*)', s).group(1))
@@ -107,15 +107,15 @@ if __name__ == '__main__':
     rms_3d_svd = get_rigid_rms(fids1[:3, :], fids2[:3, :])
     # Ground truth fiducials
     camera_set.set_tfm_params(*params1)
-    fids1_tfmd2d1 = camera_set.cam1.p.dot(fids1)
+    fids1_tfmd2d1 = camera_set.cams[0].p.dot(fids1)
     fids1_tfmd2d1 = fids1_tfmd2d1[:2, :]/fids1_tfmd2d1[2, :]
-    fids1_tfmd2d2 = camera_set.cam2.p.dot(fids1)
+    fids1_tfmd2d2 = camera_set.cams[1].p.dot(fids1)
     fids1_tfmd2d2 = fids1_tfmd2d2[:2, :]/fids1_tfmd2d2[2, :]
     # Synthetic CT fiducials
     camera_set.set_tfm_params(*params2)
-    fids2_tfmd2d1 = camera_set.cam1.p.dot(fids2)
+    fids2_tfmd2d1 = camera_set.cams[0].p.dot(fids2)
     fids2_tfmd2d1 = fids2_tfmd2d1[:2, :]/fids2_tfmd2d1[2, :]
-    fids2_tfmd2d2 = camera_set.cam2.p.dot(fids2)
+    fids2_tfmd2d2 = camera_set.cams[1].p.dot(fids2)
     fids2_tfmd2d2 = fids2_tfmd2d2[:2, :]/fids2_tfmd2d2[2, :]
     rms_2d_1 = get_rms_err(fids1_tfmd2d1 - fids2_tfmd2d1)
     rms_2d_2 = get_rms_err(fids1_tfmd2d2 - fids2_tfmd2d2)

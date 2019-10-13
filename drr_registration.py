@@ -10,32 +10,42 @@ class DrrRegistration(object):
         self.drr_set = drr_set
         self.optimizer = optimizer
         self._metric = getattr(metrics, metric)
-        self._mask1, self._mask2 = (0.0, 0.0, 1.0, 1.0), (0.0, 0.0, 1.0, 1.0)
+        self._mask1 = (0.0, 0.0, 1.0, 1.0)
+        self._mask2 = (0.0, 0.0, 1.0, 1.0)
+        self._mask3 = (0.0, 0.0, 1.0, 1.0)
+        self._mask4 = (0.0, 0.0, 1.0, 1.0)
+        self.xrays = []
 
-    def set_xrays(self, xray1, xray2):
-        self.xray1, self.xray2 = xray1, xray2
+    def set_xrays(self, *xrays):
+        self.xrays = xrays
 
     def optimizer_callback(self, x):
         print('Metric value: {}, Params: {}'.format(self.metric_cache, x))
 
+    @staticmethod
+    def array_from_mask(mask, shape):
+        h, w = shape
+        arr = np.zeros((h, w)).astype(np.bool)
+        a, b, c, d = mask
+        start_dim1, end_dim1 = min(int(b*h), int(d*h)), max(int(b*h), int(d*h))
+        start_dim2, end_dim2 = min(int(a*w), int(c*w)), max(int(a*w), int(c*w))
+        arr[start_dim1:end_dim1, start_dim2:end_dim2] = True
+        return arr
+
     def objective_function(self, x, *args):
         self.drr_set.set_tfm_params(*x.tolist())
-        drr1, drr2 = self.drr_set.raybox.trace_rays()
-        assert drr1.shape == self.xray1.shape and drr2.shape == self.xray2.shape
-        h1, w1 = drr1.shape
-        h2, w2 = drr2.shape
-        a1, b1, c1, d1 = self.mask1
-        a2, b2, c2, d2 = self.mask2
-        mask1 = np.zeros(drr1.shape).astype(np.bool)
-        mask2 = np.zeros(drr2.shape).astype(np.bool)
-        start_dim11, end_dim11 = min(int(b1*h1), int(d1*h1)), max(int(b1*h1), int(d1*h1))
-        start_dim21, end_dim21 = min(int(a1*w1), int(c1*w1)), max(int(a1*w1), int(c1*w1))
-        start_dim12, end_dim12 = min(int(b2*h2), int(d2*h2)), max(int(b2*h2), int(d2*h2))
-        start_dim22, end_dim22 = min(int(a2*w2), int(c2*w2)), max(int(a2*w2), int(c2*w2))
-        mask1[start_dim11:end_dim11, start_dim21:end_dim21] = True
-        mask2[start_dim12:end_dim12, start_dim22:end_dim22] = True
-        self.metric_cache = float(self.metric(self.xray1, drr1, mask1) + self.metric(self.xray2, drr2, mask2))
-        return self.metric_cache
+        drrs = self.drr_set.raybox.trace_rays()
+        assert len(drrs) == len(self.xrays)
+        n = len(drrs)
+        metric_value = 0
+        for idx in range(n):
+            mask = self.array_from_mask(
+                getattr(self, 'mask{:d}'.format(idx+1)),
+                drrs[idx].shape
+            )
+            metric_value += float(self.metric(self.xrays[idx], drrs[idx], mask))
+        self.metric_cache = metric_value
+        return metric_value
 
     @property
     def metric(self):
@@ -62,6 +72,24 @@ class DrrRegistration(object):
     def mask2(self, mask):
         assert isinstance(mask, (tuple, list)) and len(mask) == 4
         self._mask2 = tuple(mask)
+
+    @property
+    def mask3(self):
+        return self._mask3
+
+    @mask3.setter
+    def mask3(self, mask):
+        assert isinstance(mask, (tuple, list)) and len(mask) == 4
+        self._mask3 = tuple(mask)
+
+    @property
+    def mask4(self):
+        return self._mask4
+
+    @mask4.setter
+    def mask4(self, mask):
+        assert isinstance(mask, (tuple, list)) and len(mask) == 4
+        self._mask4 = tuple(mask)
 
     def register(self,
                  x0,

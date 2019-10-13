@@ -8,14 +8,14 @@ from utils import recons_DLT
 class CameraSet(object):
     def __init__(self):
         # tx ty tz rx (x) ry (y) rz (x)
-        self.cam1, self.cam2, self.center = None, None, None
+        self.cams = []
+        self.center = None
         self.params = [0, 0, 0, 0, 0, 0]
         self.tfm = np.eye(4)
 
-    def set_cams(self, cam1, cam2):
-        self.cam1 = cam1
-        self.cam2 = cam2
-        self.center = self._get_center(cam1, cam2)
+    def set_cams(self, *cams):
+        self.cams = cams
+        self.center = self._get_center(cams[0], cams[1])
 
     def move_to(self, dst):
         tx = self.center[0] - dst[0]
@@ -38,7 +38,8 @@ class CameraSet(object):
         t = (-r.dot(c - t) + c).reshape((3, 1))
         tfm = np.block([[r,       t],
                         [0, 0, 0, 1]])
-        self.cam1.tfm, self.cam2.tfm = tfm, tfm
+        for idx in range(len(self.cams)):
+            self.cams[idx].tfm = tfm
         self.tfm = tfm
 
     @staticmethod
@@ -62,8 +63,8 @@ class CameraSet(object):
         return r
 
     def make_p_pprime(self):
-        i = self.cam1._m[2, :3]/np.linalg.norm(self.cam1._m[2, :3])
-        j = self.cam2._m[2, :3]/np.linalg.norm(self.cam2._m[2, :3])
+        i = self.cams[0]._m[2, :3]/np.linalg.norm(self.cams[0]._m[2, :3])
+        j = self.cams[1]._m[2, :3]/np.linalg.norm(self.cams[1]._m[2, :3])
         k = np.cross(i, j)
         p = np.vstack([i, j, k]).T
         p_prime = np.array([[1, -np.dot(i, j), 0],
@@ -91,8 +92,8 @@ class CameraSet(object):
     def plot_camera_set(self):
         fig = plt.figure()
         ax = fig.gca(projection='3d')
-        self.cam1._make_cam_plot(fig, ax, suffix='1')
-        self.cam2._make_cam_plot(fig, ax, suffix='2')
+        for idx, cam in enumerate(self.cams, 1):
+            cam._make_cam_plot(fig, ax, suffix=str(idx))
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
@@ -121,4 +122,3 @@ class CameraSet(object):
         ax.set_ylim3d(center[1] - 600, center[1] + 600)
         ax.set_zlim3d(center[2] - 600, center[2] + 600)
         plt.show(block=False)
-

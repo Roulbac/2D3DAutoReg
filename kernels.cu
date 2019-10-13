@@ -4,8 +4,8 @@
 __constant__ const float MAX_FLOAT32 = 3.4028e+038;
 __constant__ const float MIN_FLOAT32 = -3.4028e+038;
 __constant__ const float EPS_FLOAT32 = 2.22045e-016;
-__constant__ float MU_WATER = 0.1*9.187001E-01;
-__constant__ float MU_AIR = 0.1*8.0859E-04;
+__constant__ float MU_WATER = 0.037;
+__constant__ float MU_AIR = 0.00046;
 
 __global__ void backprojectPixel(
     const int h, const int w, float * dsts,

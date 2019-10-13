@@ -43,6 +43,11 @@ class ThresholdWidget(QtWidgets.QWidget):
         self.input_box.setAlignment(QtCore.Qt.AlignCenter)
         self.input_box.setValidator(QtGui.QDoubleValidator())
         self.button = QtWidgets.QPushButton('Set Threshold', self)
+        button_font = self.button.font()
+        button_font.setPointSize(10)
+        self.button.setFont(button_font)
+        # self.button.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Maximum)
+        # self.input_box.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Maximum)
         self.button.clicked.connect(self.on_clicked)
         self.layout = QtWidgets.QVBoxLayout()
         self.layout.addWidget(self.input_box, QtCore.Qt.AlignHCenter)
@@ -323,14 +328,21 @@ class MainWindow(QtWidgets.QMainWindow):
     input_cams_sig = QtCore.Signal(list)
     base_pixmap_1 = QtCore.Signal(QtGui.QPixmap)
     base_pixmap_2 = QtCore.Signal(QtGui.QPixmap)
+    base_pixmap_3 = QtCore.Signal(QtGui.QPixmap)
+    base_pixmap_4 = QtCore.Signal(QtGui.QPixmap)
     drr1 = QtCore.Signal(np.ndarray)
     drr2 = QtCore.Signal(np.ndarray)
+    drr3 = QtCore.Signal(np.ndarray)
+    drr4 = QtCore.Signal(np.ndarray)
     alpha = QtCore.Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('DRR Viewer')
-        self.setMinimumSize(QtCore.QSize(1280, 720))
+        self.setMinimumSize(QtCore.QSize(800, 720))
+        size_policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        size_policy.setHeightForWidth(True)
+        self.setSizePolicy(size_policy)
         self.central_widg = QtWidgets.QWidget(self)
         # File dialog
         self.file_dialog = QtWidgets.QFileDialog()
@@ -357,6 +369,9 @@ class MainWindow(QtWidgets.QMainWindow):
         save_params_action = QtWidgets.QAction('Save parameters as ...', self)
         save_params_action.triggered.connect(self.on_save_params)
         self.file_menu.addAction(save_params_action)
+        load_params_action = QtWidgets.QAction('Load parameters from ...', self)
+        load_params_action.triggered.connect(self.on_load_params)
+        self.file_menu.addAction(load_params_action)
         save_setup_action = QtWidgets.QAction('Save current setup as ...', self)
         save_setup_action.triggered.connect(self.on_save_setup)
         self.file_menu.addAction(save_setup_action)
@@ -366,6 +381,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Images
         self.img1_widg = ImageWidget(self.central_widg)
         self.img2_widg = ImageWidget(self.central_widg)
+        self.img3_widg = ImageWidget(self.central_widg)
+        self.img4_widg = ImageWidget(self.central_widg)
         # Parameter widgs
         self.params_widg = ParametersWidget(self.central_widg)
         self.params_widg.params_edited.connect(self.on_refresh)
@@ -376,18 +393,35 @@ class MainWindow(QtWidgets.QMainWindow):
         # Recenter button
         self.recenter_widg = RecenterWidget(self)
         # Layout
-        refr_thr_layout = QtWidgets.QVBoxLayout()
-        refr_thr_layout.addWidget(self.refresh_butn)
-        refr_thr_layout.addWidget(self.recenter_widg)
-        layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.img1_widg, 0, 0)
-        layout.addWidget(self.img2_widg, 0, 2)
-        layout.addWidget(self.threshold_widg, 0, 1)
-        layout.addWidget(self.params_widg, 1, 0, 1, 2)
-        layout.addLayout(refr_thr_layout, 1, 2)
-        layout.setRowStretch(0, 1)
-        layout.setColumnStretch(0, 1)
-        layout.setColumnStretch(2, 1)
+        refresh_layout = QtWidgets.QVBoxLayout()
+        refresh_layout.addWidget(self.refresh_butn)
+        refresh_layout.addWidget(self.recenter_widg)
+        # TODO: Add Labels (AP, LAT, left, right)
+        # TODO: Require at least AP and LAT
+        # TODO: 4x4 grid layout
+        left_imgs_layout = QtWidgets.QVBoxLayout()
+        left_imgs_layout.addWidget(self.img1_widg)
+        left_imgs_layout.addWidget(self.img3_widg)
+        right_imgs_layout = QtWidgets.QVBoxLayout()
+        right_imgs_layout.addWidget(self.img2_widg)
+        right_imgs_layout.addWidget(self.img4_widg)
+        # layout = QtWidgets.QGridLayout()
+        # layout.addLayout(left_imgs_layout, 0, 0, 1, 2)
+        # layout.addLayout(right_imgs_layout, 0, 3, 1, 2)
+        # layout.addWidget(self.threshold_widg, 0, 2, 1, 1)
+        # layout.addWidget(self.params_widg, 1, 0, 1, 3)
+        # layout.addLayout(refresh_layout, 1, 3, 1, 2)
+        # layout.setRowStretch(0, 1)
+        layout = QtWidgets.QVBoxLayout()
+        top_layout = QtWidgets.QHBoxLayout()
+        top_layout.addLayout(left_imgs_layout, 1)
+        top_layout.addWidget(self.threshold_widg, 0)
+        top_layout.addLayout(right_imgs_layout, 1)
+        bottom_layout = QtWidgets.QHBoxLayout()
+        bottom_layout.addWidget(self.params_widg, 1)
+        bottom_layout.addLayout(refresh_layout, 0)
+        layout.addLayout(top_layout, 2)
+        layout.addLayout(bottom_layout, 0)
         self.central_widg.setLayout(layout)
         self.setCentralWidget(self.central_widg)
         # Focus
@@ -395,16 +429,24 @@ class MainWindow(QtWidgets.QMainWindow):
         # Connect signals and slots
         self.base_pixmap_1.connect(self.img1_widg.on_base_pixmap)
         self.base_pixmap_2.connect(self.img2_widg.on_base_pixmap)
+        self.base_pixmap_3.connect(self.img3_widg.on_base_pixmap)
+        self.base_pixmap_4.connect(self.img4_widg.on_base_pixmap)
         self.params_widg.alpha_slider.valueChanged.connect(self.on_alphaslider_update)
         self.refresh_butn.released.connect(self.on_refresh_btn)
         self.threshold_widg.new_threshold.connect(self.on_new_threshold)
         self.recenter_widg.new_center.connect(self.on_new_center)
         self.alpha.connect(self.img1_widg.on_alpha)
         self.alpha.connect(self.img2_widg.on_alpha)
+        self.alpha.connect(self.img3_widg.on_alpha)
+        self.alpha.connect(self.img4_widg.on_alpha)
         self.drr1.connect(self.img1_widg.on_drr)
         self.drr2.connect(self.img2_widg.on_drr)
+        self.drr3.connect(self.img3_widg.on_drr)
+        self.drr4.connect(self.img4_widg.on_drr)
         self.img1_widg.roi_finalize.connect(self.on_roi_finalize_1)
         self.img2_widg.roi_finalize.connect(self.on_roi_finalize_2)
+        self.img3_widg.roi_finalize.connect(self.on_roi_finalize_3)
+        self.img4_widg.roi_finalize.connect(self.on_roi_finalize_4)
         # Logic
         self.raybox = RayBox()
         self.drr_set = DrrSet(self.raybox)
@@ -428,6 +470,8 @@ class MainWindow(QtWidgets.QMainWindow):
         roiselection_action.setCheckable(True)
         roiselection_action.toggled.connect(self.img1_widg.on_enable_roi)
         roiselection_action.toggled.connect(self.img2_widg.on_enable_roi)
+        roiselection_action.toggled.connect(self.img3_widg.on_enable_roi)
+        roiselection_action.toggled.connect(self.img4_widg.on_enable_roi)
         self.edit_menu.addAction(roiselection_action)
 
     @QtCore.Slot(bool)
@@ -447,6 +491,8 @@ class MainWindow(QtWidgets.QMainWindow):
             fpath_params = '{}.txt'.format(fpath)
             fpath_drr1 = '{}_drr1.png'.format(fpath)
             fpath_drr2 = '{}_drr2.png'.format(fpath)
+            fpath_drr3 = '{}_drr3.png'.format(fpath)
+            fpath_drr4 = '{}_drr4.png'.format(fpath)
             with open(fpath_params, 'w') as f:
                 params_str = 'Tx = {:.4f}\nTy = {:.4f}\nTz = {:.4f}\nRx = {:.4f}\nRy = {:.4f}\nRz = {:.4f}'.format(
                     self.drr_set.params[0],
@@ -459,6 +505,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 f.write(params_str)
             plt.imsave(fpath_drr1, self.img1_widg.drr, cmap='gray', vmin=0, vmax=1)
             plt.imsave(fpath_drr2, self.img2_widg.drr, cmap='gray', vmin=0, vmax=1)
+            if self.img3_widg.drr is not None:
+                plt.imsave(fpath_drr3, self.img3_widg.drr, cmap='gray', vmin=0, vmax=1)
+            if self.img4_widg.drr is not None:
+                plt.imsave(fpath_drr4, self.img4_widg.drr, cmap='gray', vmin=0, vmax=1)
 
     @QtCore.Slot()
     def on_save_params(self):
@@ -477,6 +527,23 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.drr_set.params[5]
                 )
                 f.write(params_str)
+
+    @QtCore.Slot()
+    def on_load_params(self):
+        self.file_dialog.setFileMode(QtWidgets.QFileDialog.ExistingFile)
+        self.file_dialog.setAcceptMode(QtWidgets.QFileDialog.AcceptOpen)
+        self.file_dialog.setNameFilter('Text Files (*.txt)')
+        if self.file_dialog.exec_():
+            fpath = self.file_dialog.selectedFiles()[0]
+            with open(fpath, 'r') as f:
+                s = f.read()
+                tx = float(re.search('[Tt][Xx]\s*=\s*([-+]?[0-9]*\.?[0-9]+)', s).group(1))
+                ty = float(re.search('[Tt][Yy]\s*=\s*([-+]?[0-9]*\.?[0-9]+)', s).group(1))
+                tz = float(re.search('[Tt][Zz]\s*=\s*([-+]?[0-9]*\.?[0-9]+)', s).group(1))
+                rx = float(re.search('[Rr][Xx]\s*=\s*([-+]?[0-9]*\.?[0-9]+)', s).group(1))
+                ry = float(re.search('[Rr][Yy]\s*=\s*([-+]?[0-9]*\.?[0-9]+)', s).group(1))
+                rz = float(re.search('[Rr][Zz]\s*=\s*([-+]?[0-9]*\.?[0-9]+)', s).group(1))
+            self.params_widg.set_params(tx, ty, tz, rx, ry, rz)
 
     @QtCore.Slot()
     def on_save_drr1(self):
@@ -516,6 +583,9 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot()
     def plot_set(self):
         self.drr_set.plot_camera_set()
+        for idx, cam in enumerate(self.drr_set.cams, 1):
+            print('Cam', idx)
+            print(cam.m)
 
     @QtCore.Slot(list)
     def on_new_center(self, center):
@@ -561,11 +631,12 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.file_dialog.exec_():
             fpaths = self.file_dialog.selectedFiles()
             self.fd_in_out['C-Arm Images'][1] = fpaths
-            xray1 = read_image_as_np(fpaths[0])
-            xray2 = read_image_as_np(fpaths[1])
-            self.drr_registration.set_xrays(xray1, xray2)
-            self.base_pixmap_1.emit(QtGui.QPixmap(fpaths[0]))
-            self.base_pixmap_2.emit(QtGui.QPixmap(fpaths[1]))
+            xrays = []
+            for idx, fpath in enumerate(fpaths, 1):
+                xrays.append(read_image_as_np(fpath))
+                signal = getattr(self, 'base_pixmap_{:d}'.format(idx))
+                signal.emit(QtGui.QPixmap(fpath))
+            self.drr_registration.set_xrays(*xrays)
 
     @QtCore.Slot()
     def on_refresh(self):
@@ -581,10 +652,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.draw_drrs()
 
     def draw_drrs(self):
-        drr1, drr2 = self.raybox.trace_rays()
-        print('DRR')
-        self.drr1.emit(drr1)
-        self.drr2.emit(drr2)
+        drrs = self.raybox.trace_rays()
+        assert len(drrs) < 5
+        for idx, drr in enumerate(drrs, 1):
+            signal = getattr(self, 'drr{:d}'.format(idx))
+            signal.emit(drr)
 
     def set_rho(self, fpaths):
         rho, sp = read_rho(fpaths[0])
@@ -592,21 +664,17 @@ class MainWindow(QtWidgets.QMainWindow):
         print('Set Rho')
 
     def init_cams_from_path(self, fpaths):
-        with open(fpaths[0]) as f:
-            s1 = f.read()
-        with open(fpaths[1]) as f:
-            s2 = f.read()
-        m1 = str_to_mat(re.search('[Mm]\s*=\s*\[(.*)\]', s1).group(1))
-        k1 = str_to_mat(re.search('[Kk]\s*=\s*\[(.*)\]', s1).group(1))
-        h1 = int(re.search('[Hh]\s*=\s*([0-9]+)', s1).group(1))
-        w1 = int(re.search('[Ww]\s*=\s*([0-9]+)', s1).group(1))
-        m2 = str_to_mat(re.search('[Mm]\s*=\s*\[(.*)\]', s2).group(1))
-        k2 = str_to_mat(re.search('[Kk]\s*=\s*\[(.*)\]', s2).group(1))
-        h2 = int(re.search('[Hh]\s*=\s*([0-9]+)', s2).group(1))
-        w2 = int(re.search('[Ww]\s*=\s*([0-9]+)', s2).group(1))
-        cam1 = Camera(m=m1, k=k1, h=h1, w=w1)
-        cam2 = Camera(m=m2, k=k2, h=h2, w=w2)
-        self.drr_set.set_cams(cam1, cam2)
+        cams = []
+        for fpath in fpaths:
+            with open(fpath) as f:
+                s = f.read()
+            m = str_to_mat(re.search('[Mm]\s*=\s*\[(.*)\]', s).group(1))
+            k = str_to_mat(re.search('[Kk]\s*=\s*\[(.*)\]', s).group(1))
+            h = int(re.search('[Hh]\s*=\s*([0-9]+)', s).group(1))
+            w = int(re.search('[Ww]\s*=\s*([0-9]+)', s).group(1))
+            cams.append(Camera(m=m, k=k, h=h, w=w))
+        # TODO: Add to drr_set
+        self.drr_set.set_cams(*cams)
         print('Set cams')
 
     @QtCore.Slot(float, float, float, float)
@@ -616,6 +684,14 @@ class MainWindow(QtWidgets.QMainWindow):
     @QtCore.Slot(float, float, float, float)
     def on_roi_finalize_2(self, a, b, c, d):
         self.drr_registration.mask2 = (a, b, c, d)
+
+    @QtCore.Slot(float, float, float, float)
+    def on_roi_finalize_3(self, a, b, c, d):
+        self.drr_registration.mask3 = (a, b, c, d)
+
+    @QtCore.Slot(float, float, float, float)
+    def on_roi_finalize_4(self, a, b, c, d):
+        self.drr_registration.mask4 = (a, b, c, d)
 
 
 if __name__ == '__main__':
