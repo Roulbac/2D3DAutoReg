@@ -1,8 +1,12 @@
-# GPU Digitally Reconstructed Radiograph (DRR) Registration GUI in PySide2
+# GPU and CPU Digitally Reconstructed Radiograph (DRR) Registration GUI in PySide2
 
 This repository contains code for CPU-based and GPU-based DRR to X-Ray registration software.
 
 The registration is set up with 4 views, needing 4 camera intrinsic and extrinsic matrices.
+
+An automatic SciPy optimizer using a Normalized Cross-Correlation score is used to fine-tune the final camera pose.
+
+![GUI](https://i.imgur.com/1B9sfJs.jpg "DRR example")
 
 ## Camera file format 
 
@@ -28,6 +32,8 @@ Initialization steps are as following
 To run DRR generation through the GPU, tick the 'Enable GPU Mode' option.
 
 To auto-refresh DRR generation at parameter change, which can be useful for quick initial positioning, tick the 'Enable auto-refresh' option.
+
+To fine-tune pose parameters, Edit -> Run Optimizer.
 
 # Coordinate system
 
