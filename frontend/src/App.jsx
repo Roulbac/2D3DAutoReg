@@ -736,6 +736,7 @@ export default function App() {
   const [overlayAlpha, setOverlayAlpha] = React.useState(0.4)
   const [selectedMetric, setSelectedMetric] = React.useState('ncc')
   const [availableMetrics, setAvailableMetrics] = React.useState(['ncc'])
+  const [selectedOptimizer, setSelectedOptimizer] = React.useState('scipy_powell')
   const [isRegistering, setIsRegistering] = React.useState(false)
   const [regProgress, setRegProgress] = React.useState(null)
   const [sessionReady, setSessionReady] = React.useState(false)
@@ -1050,6 +1051,7 @@ export default function App() {
       type: 'registration_start',
       pose, preset, threshold,
       metric: selectedMetric,
+      optimizer: selectedOptimizer,
       report_every_n: 5,
     }))
   }
@@ -1235,6 +1237,18 @@ export default function App() {
                     onClick={() => fileInputRef.current?.click()}
                   >Upload Target X-ray</button>
                 )}
+              </div>
+              <div className="reg-metric-row">
+                <label className="reg-metric-label">Optimizer</label>
+                <select
+                  className="preset-select"
+                  value={selectedOptimizer}
+                  onChange={(e) => setSelectedOptimizer(e.target.value)}
+                >
+                  <option value="scipy_powell">Scipy - Powell</option>
+                  <option value="pytorch_adamw">PyTorch - AdamW</option>
+                  <option value="pytorch_sgd">PyTorch - SGD</option>
+                </select>
               </div>
               <div className="reg-metric-row">
                 <label className="reg-metric-label">Metric</label>

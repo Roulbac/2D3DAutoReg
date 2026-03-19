@@ -250,6 +250,24 @@ class DRREngine:
 
         return Rz @ Ry @ Rx
 
+    @staticmethod
+    def _euler_to_rotation_diff(angles_deg: torch.Tensor, device: torch.device) -> torch.Tensor:
+        """Differentiable rotation matrix R = Rz · Ry · Rx from a (3,) tensor in degrees."""
+        angles_rad = angles_deg * (math.pi / 180.0)
+        rx, ry, rz = angles_rad[0], angles_rad[1], angles_rad[2]
+
+        cx, sx = torch.cos(rx), torch.sin(rx)
+        cy, sy = torch.cos(ry), torch.sin(ry)
+        cz, sz = torch.cos(rz), torch.sin(rz)
+
+        # R = Rz @ Ry @ Rx — built directly to preserve the computation graph
+        R = torch.stack([
+            torch.stack([cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx]),
+            torch.stack([sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx]),
+            torch.stack([-sy, cy * sx, cy * cx]),
+        ])
+        return R
+
     def _apply_pose(self, tx: float, ty: float, tz: float,
                     rx: float, ry: float, rz: float,
                     preset: str = "AP"):
@@ -273,6 +291,27 @@ class DRREngine:
         R_w2c = default_R @ R_world.T
         R_c2w = R_w2c.T
         t_cam = torch.tensor([tx, ty, tz], dtype=torch.float32, device=self.device)
+        t_world = R_c2w @ t_cam
+
+        source_world = source_rotated + t_world
+
+        return source_world, R_w2c
+
+    def _apply_pose_diff(self, pose: torch.Tensor, preset: str = "AP"):
+        """Differentiable version of _apply_pose. pose is a (6,) tensor [tx,ty,tz,rx,ry,rz]."""
+        default_source, default_R = self.presets[preset]
+
+        t_cam = pose[:3]
+        angles = pose[3:]
+
+        R_local = self._euler_to_rotation_diff(angles, self.device)
+        R_world = default_R.T @ R_local @ default_R
+
+        source_rel = default_source - self.centroid
+        source_rotated = R_world @ source_rel + self.centroid
+
+        R_w2c = default_R @ R_world.T
+        R_c2w = R_w2c.T
         t_world = R_c2w @ t_cam
 
         source_world = source_rotated + t_world
@@ -596,6 +635,39 @@ class DRREngine:
         vmin, vmax = img.min(), img.max()
         if vmax - vmin > 1e-8:
             img = (img - vmin) / (vmax - vmin)
+
+        return img
+
+    def render_differentiable(
+        self,
+        pose: torch.Tensor,
+        preset: str = "AP",
+        threshold: float | None = None,
+    ) -> torch.Tensor:
+        """Differentiable DRR rendering for gradient-based optimization.
+
+        Parameters
+        ----------
+        pose : (6,) tensor with requires_grad — [tx, ty, tz, rx, ry, rz]
+
+        Returns
+        -------
+        (image_size, image_size) tensor in [0, 1], part of the computation graph.
+        """
+        source, R_w2c = self._apply_pose_diff(pose, preset)
+        origins, dirs = self._generate_rays(source, R_w2c)
+        t_near, t_far, valid = self._aabb_intersect(origins, dirs)
+        intensities = self._sample_and_accumulate(
+            origins, dirs, t_near, t_far, valid, threshold=threshold,
+        )
+
+        img = intensities.reshape(self.image_size, self.image_size)
+        img = 1.0 - img  # invert: dense structures bright
+
+        # Differentiable normalisation to [0, 1]
+        vmin = img.min()
+        vmax = img.max()
+        img = (img - vmin) / (vmax - vmin + 1e-8)
 
         return img
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.drr_engine import DRREngine
 from app.metrics import METRIC_REGISTRY
-from app.registration import RegistrationRunner
+from app.registration import RegistrationRunner, TorchRegistrationRunner
 from app.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -166,16 +166,29 @@ async def _handle_registration_start(ws: WebSocket, session, data: dict):
     preset = data.get("preset", "AP")
     threshold = data.get("threshold")
     report_every_n = data.get("report_every_n", 5)
+    optimizer = data.get("optimizer", "scipy_powell")
 
     try:
-        runner = RegistrationRunner(
-            engine=session.engine,
-            metric_name=metric,
-            preset=preset,
-            threshold=threshold,
-            initial_pose=pose.model_dump(),
-            report_every_n=report_every_n,
-        )
+        if optimizer.startswith("pytorch_"):
+            torch_optimizer = optimizer.removeprefix("pytorch_")
+            runner = TorchRegistrationRunner(
+                engine=session.engine,
+                metric_name=metric,
+                optimizer_name=torch_optimizer,
+                preset=preset,
+                threshold=threshold,
+                initial_pose=pose.model_dump(),
+                report_every_n=report_every_n,
+            )
+        else:
+            runner = RegistrationRunner(
+                engine=session.engine,
+                metric_name=metric,
+                preset=preset,
+                threshold=threshold,
+                initial_pose=pose.model_dump(),
+                report_every_n=report_every_n,
+            )
     except ValueError as exc:
         await ws.send_json({"type": "error", "message": str(exc)})
         return
