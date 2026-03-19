@@ -115,21 +115,16 @@ class DRREngine:
 
     def load_volume_from_bytes(self, data: bytes, filename: str = "upload.nii.gz") -> None:
         """Load a NIfTI volume from in-memory bytes (no disk write)."""
+        import gzip
+
         logger.info("Loading volume from %d bytes (%s) …", len(data), filename)
-        fh = nib.FileHolder(fileobj=BytesIO(data))
+        # Decompress gzip if needed
         if filename.endswith(".gz"):
-            img = nib.Nifti1Image.from_file_map({"header": fh, "image": fh})
-        else:
-            img = nib.Nifti1Image.from_file_map({"header": fh, "image": fh})
+            data = gzip.decompress(data)
+        fh = nib.FileHolder(fileobj=BytesIO(data))
+        img = nib.Nifti1Image.from_file_map({"header": fh, "image": fh})
         spacing = np.array(img.header.get_zooms()[:3], dtype=np.float32)
-        # nibabel returns (X, Y, Z) when using get_fdata with canonical orientation
         vol_np = np.asarray(img.dataobj, dtype=np.float32)
-        # nibabel native shape is (X, Y, Z) already — same as our convention
-        # but we need to ensure LPS-like orientation matches SimpleITK's output
-        # SimpleITK returns (Z, Y, X) then we transpose to (X, Y, Z)
-        # nibabel get_fdata returns in the file's native orientation (usually RAS)
-        # Use canonical to get a consistent (X, Y, Z) in RAS, which we keep as-is
-        # since the DRR renderer only cares about shape/spacing/extent
         self.vol_shape = np.array(vol_np.shape[:3], dtype=np.float32)
         self.spacing = spacing
         self.vol_extent = self.vol_shape * self.spacing
