@@ -5,11 +5,8 @@ Web-based 2D/3D image registration tool. Load a CT volume (NIfTI), render Digita
 ## Quick Start
 
 ```bash
-docker compose up --build
+make dev    # backend on :8000, frontend on :3000
 ```
-
-- Frontend: [http://localhost:3000](http://localhost:3000)
-- Backend: [http://localhost:8000/health](http://localhost:8000/health)
 
 ## Local Development
 
@@ -40,4 +37,4 @@ Or use `make dev` to run both concurrently.
 |-------|------|
 | Frontend | React, Three.js (@react-three/fiber), Vite |
 | Backend | FastAPI, PyTorch, SimpleITK, scipy |
-| Packaging | uv (backend), npm (frontend), Docker Compose |
+| Packaging | uv (backend), npm (frontend), Modal (cloud deploy) |

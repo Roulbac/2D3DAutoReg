@@ -6,12 +6,6 @@
       "runtimeExecutable": "make",
       "runtimeArgs": ["dev"],
       "port": 3000
-    },
-    {
-      "name": "docker-compose",
-      "runtimeExecutable": "docker",
-      "runtimeArgs": ["compose", "up", "--build"],
-      "port": 3000
     }
   ]
 }
