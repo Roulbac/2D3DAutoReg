@@ -62,7 +62,7 @@ The real DRR computation logic lives in root-level Python files — not yet inte
 - `compute_error.py` — image similarity metrics, masking, DLT reconstruction
 - `metrics.py` — NCC and other registration metrics
 - `main_window.py` — legacy PySide2 GUI (reference for porting logic)
-- `test_funs.py` — procedural integration tests (not pytest); expects test data in `Test_Data/Sawbones_L2L3/`
+- `test_funs.py` — procedural integration tests (not pytest); expects test data in `sample_data/Sawbones_L2L3/`
 
 ### Modernization Roadmap
 Phase 1 (current): UI + stub API + Docker

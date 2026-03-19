@@ -65,7 +65,7 @@ class RegistrationRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global engine
-    nifti_path = os.environ.get("NIFTI_PATH", "Test_Data/HN_P001.nii.gz")
+    nifti_path = os.environ.get("NIFTI_PATH", "sample_data/HN_P001.nii.gz")
     logger.info("Initialising DRR engine with volume: %s", nifti_path)
     engine = DRREngine(nifti_path)
     logger.info("DRR engine ready.")

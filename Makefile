@@ -7,13 +7,13 @@
 #   make docker       Run everything in Docker (CPU-only)
 #   make clean        Remove generated artifacts
 #
-# Requirements: Python 3.11+, Node 20+, Test_Data/HN_P001.nii.gz
+# Requirements: Python 3.11+, Node 20+, sample_data/HN_P001.nii.gz
 # ─────────────────────────────────────────────────────────────────────
 
 # Paths
 BACKEND_DIR   := backend
 FRONTEND_DIR  := frontend
-TEST_DATA_DIR := Test_Data
+TEST_DATA_DIR := sample_data
 NIFTI_FILE    := $(TEST_DATA_DIR)/HN_P001.nii.gz
 VENV_DIR      := $(BACKEND_DIR)/.venv
 
@@ -58,7 +58,7 @@ $(FRONTEND_DIR)/node_modules: $(FRONTEND_DIR)/package.json
 # ── Run ─────────────────────────────────────────────────────────────
 
 check-data:
-	@test -f $(NIFTI_FILE) || { echo "Error: $(NIFTI_FILE) not found. Place CT volume in Test_Data/."; exit 1; }
+	@test -f $(NIFTI_FILE) || { echo "Error: $(NIFTI_FILE) not found. Place CT volume in sample_data/."; exit 1; }
 
 dev: install check-data ## Run backend + frontend concurrently
 	@echo "Starting backend on :$(BACKEND_PORT) and frontend on :$(FRONTEND_PORT) …"

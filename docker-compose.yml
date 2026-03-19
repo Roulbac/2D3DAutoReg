@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./Test_Data:/data:ro
+      - ./sample_data:/data:ro
     environment:
       - NIFTI_PATH=/data/HN_P001.nii.gz
 
