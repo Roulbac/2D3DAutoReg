@@ -580,6 +580,8 @@ function PoseControlsPanel({
   pose, onChangePose, onResetGroup, onResetPose,
   preset, availablePresets, onChangePreset,
   onFetchTransform, extrinsicMatrix, onDismissTransform,
+  onOpenIntrinsics, intrinsicsOpen, intrinsicsData, onIntrinsicsChange,
+  onApplyIntrinsics, onResetIntrinsics, onDismissIntrinsics,
 }) {
   return (
     <section className="pose-panel">
@@ -661,6 +663,55 @@ function PoseControlsPanel({
           </div>
         </div>
       )}
+
+      <button type="button" className="ghost-btn transform-btn" onClick={onOpenIntrinsics}>
+        Edit Intrinsics
+      </button>
+
+      {intrinsicsOpen && intrinsicsData && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onDismissIntrinsics() }}>
+          <div className="modal-card">
+            <div className="modal-head">
+              <h3>Camera Intrinsics (K)</h3>
+              <button type="button" className="ghost-btn tiny" onClick={onDismissIntrinsics}>✕</button>
+            </div>
+            <div className="intrinsics-grid">
+              {['fx', 'fy', 'cx', 'cy'].map((field) => (
+                <label key={field} className="intrinsics-field">
+                  <span className="intrinsics-field-label">{field}</span>
+                  <input
+                    className="intrinsics-field-input"
+                    type="number"
+                    step="0.1"
+                    value={intrinsicsData[field]}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      if (!Number.isNaN(v)) onIntrinsicsChange({ ...intrinsicsData, [field]: v })
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <pre className="extrinsic-matrix">
+              {(() => {
+                const { fx, fy, cx, cy } = intrinsicsData
+                const K = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
+                return K.map((row, i) => {
+                  const inner = row.map((v) => v.toFixed(4).padStart(12)).join(', ')
+                  const prefix = i === 0 ? '[[' : ' ['
+                  const suffix = i < K.length - 1 ? '],' : ']]'
+                  return prefix + inner + suffix
+                }).join('\n')
+              })()}
+            </pre>
+            <div className="modal-actions">
+              <button type="button" className="ghost-btn mini" onClick={onApplyIntrinsics}>Apply</button>
+              <button type="button" className="ghost-btn mini" onClick={onResetIntrinsics}>Reset to Default</button>
+              <button type="button" className="ghost-btn mini" onClick={onDismissIntrinsics}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -678,9 +729,21 @@ export default function App() {
   const [interactiveMode, setInteractiveMode] = React.useState(false)
   const [extrinsicMatrix, setExtrinsicMatrix] = React.useState(null)
   const [threshold, setThreshold] = React.useState(300)
+  const [intrinsicsOpen, setIntrinsicsOpen] = React.useState(false)
+  const [intrinsicsData, setIntrinsicsData] = React.useState(null)
+  const [targetImage, setTargetImage] = React.useState(null)
+  const [overlayAlpha, setOverlayAlpha] = React.useState(0.4)
+  const [selectedMetric, setSelectedMetric] = React.useState('ncc')
+  const [availableMetrics, setAvailableMetrics] = React.useState(['ncc'])
+  const [isRegistering, setIsRegistering] = React.useState(false)
+  const [regProgress, setRegProgress] = React.useState(null)
 
   const debounceTimerRef = React.useRef(null)
   const abortControllerRef = React.useRef(null)
+  const fileInputRef = React.useRef(null)
+  const volumeInputRef = React.useRef(null)
+  const [volumeName, setVolumeName] = React.useState(null)
+  const [isUploadingVolume, setIsUploadingVolume] = React.useState(false)
 
   // Fetch static scene geometry from backend on mount or preset change
   React.useEffect(() => {
@@ -689,6 +752,14 @@ export default function App() {
       .then(setSceneInfo)
       .catch((err) => console.error('Failed to fetch scene info:', err))
   }, [preset])
+
+  // Fetch available registration metrics on mount
+  React.useEffect(() => {
+    fetch(`${API_BASE}/api/registration/metrics`)
+      .then((r) => r.json())
+      .then((data) => setAvailableMetrics(data.metrics || ['ncc']))
+      .catch((err) => console.error('Failed to fetch metrics:', err))
+  }, [])
 
   const availablePresets = sceneInfo?.available_presets || ['AP']
   const posePayload = React.useMemo(() => ({ pose, preset, threshold }), [pose, preset, threshold])
@@ -769,6 +840,207 @@ export default function App() {
     }
   }
 
+  // Fetch and open intrinsics modal
+  const openIntrinsics = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/intrinsics`)
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      const data = await response.json()
+      setIntrinsicsData({ fx: data.fx, fy: data.fy, cx: data.cx, cy: data.cy })
+      setIntrinsicsOpen(true)
+    } catch (err) {
+      setError(err.message || 'Failed to fetch intrinsics')
+    }
+  }
+
+  const applyIntrinsics = async () => {
+    if (!intrinsicsData) return
+    try {
+      const response = await fetch(`${API_BASE}/api/intrinsics`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(intrinsicsData),
+      })
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      setIntrinsicsOpen(false)
+      // Re-render if in interactive mode
+      if (interactiveMode) {
+        if (abortControllerRef.current) abortControllerRef.current.abort()
+        const controller = new AbortController()
+        abortControllerRef.current = controller
+        fetchDrr({ pose, preset, threshold }, controller.signal)
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to apply intrinsics')
+    }
+  }
+
+  const resetIntrinsics = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/intrinsics/reset`, { method: 'POST' })
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      const data = await response.json()
+      setIntrinsicsData({ fx: data.fx, fy: data.fy, cx: data.cx, cy: data.cy })
+    } catch (err) {
+      setError(err.message || 'Failed to reset intrinsics')
+    }
+  }
+
+  // --- Registration handlers ---
+  const handleVolumeUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingVolume(true)
+    setError(null)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const response = await fetch(`${API_BASE}/api/volume/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || `Upload failed with status ${response.status}`)
+      }
+      const data = await response.json()
+      setVolumeName(data.filename || file.name)
+      setSceneInfo(data)
+      setDrrs([])
+      setTargetImage(null)
+    } catch (err) {
+      setError(err.message || 'Failed to upload volume')
+    } finally {
+      setIsUploadingVolume(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleClearVolume = async () => {
+    setError(null)
+    try {
+      const response = await fetch(`${API_BASE}/api/volume/clear`, { method: 'POST' })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || 'Failed to clear volume')
+      }
+      setVolumeName(null)
+      setSceneInfo(null)
+      setDrrs([])
+      setTargetImage(null)
+    } catch (err) {
+      setError(err.message || 'Failed to clear volume')
+    }
+  }
+
+  const handleTargetUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const response = await fetch(`${API_BASE}/api/registration/target`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) throw new Error(`Upload failed with status ${response.status}`)
+      const data = await response.json()
+      setTargetImage(data.target_image)
+    } catch (err) {
+      setError(err.message || 'Failed to upload target image')
+    }
+    // Reset file input so the same file can be re-uploaded
+    e.target.value = ''
+  }
+
+  const clearTarget = async () => {
+    try {
+      await fetch(`${API_BASE}/api/registration/target`, { method: 'DELETE' })
+      setTargetImage(null)
+    } catch (err) {
+      setError(err.message || 'Failed to clear target')
+    }
+  }
+
+  const startRegistration = async () => {
+    setIsRegistering(true)
+    setRegProgress(null)
+    setError('')
+    try {
+      const response = await fetch(`${API_BASE}/api/registration/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pose, preset, threshold,
+          metric: selectedMetric,
+          report_every_n: 5,
+        }),
+      })
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.detail || `Registration failed with status ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const events = buffer.split('\n\n')
+        buffer = events.pop() // keep incomplete event
+
+        for (const eventStr of events) {
+          if (!eventStr.trim()) continue
+          const lines = eventStr.split('\n')
+          let eventType = 'message'
+          let data = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.slice(7)
+            if (line.startsWith('data: ')) data = line.slice(6)
+          }
+          if (!data) continue
+
+          if (eventType === 'progress') {
+            const progress = JSON.parse(data)
+            setRegProgress({ iteration: progress.iteration, metric_value: progress.metric_value })
+            setDrrs([{ view: 'Registration', image: progress.drr }])
+            setPose(progress.pose)
+          } else if (eventType === 'complete') {
+            const result = JSON.parse(data)
+            setRegProgress({ iteration: result.iterations, metric_value: result.metric_value })
+            setDrrs([{ view: 'Registration', image: result.drr }])
+            setPose(result.pose)
+            setIsRegistering(false)
+          } else if (eventType === 'cancelled') {
+            setIsRegistering(false)
+          } else if (eventType === 'error') {
+            const err = JSON.parse(data)
+            setError(err.message)
+            setIsRegistering(false)
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setError(err.message || 'Registration failed')
+      }
+    } finally {
+      setIsRegistering(false)
+    }
+  }
+
+  const cancelRegistration = async () => {
+    try {
+      await fetch(`${API_BASE}/api/registration/cancel`, { method: 'POST' })
+    } catch (err) {
+      console.error('Failed to cancel registration:', err)
+    }
+  }
+
   // Interactive mode: auto-generate DRR on pose change with debounce + abort
   React.useEffect(() => {
     if (!interactiveMode) return
@@ -794,14 +1066,40 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar-card">
         <div className="topbar-head">
-          <h1>Digitally Reconstructed Radiograph Workbench</h1>
+          <h1>DRR Workbench</h1>
         </div>
         <div className="topbar-status">
           <span className={`status-chip ${isLoading ? 'busy' : hasDrrData ? 'ok' : 'idle'}`}>
-            {isLoading ? 'Rendering…' : hasDrrData ? 'DRR ready' : 'No DRR yet'}
+            {isUploadingVolume ? 'Loading volume…' : isLoading ? 'Rendering…' : hasDrrData ? 'DRR ready' : 'No DRR yet'}
           </span>
+          {volumeName && <span className="volume-name">{volumeName}</span>}
         </div>
         <div className="topbar-actions">
+          <input
+            type="file"
+            ref={volumeInputRef}
+            accept=".nii,.nii.gz,.gz,.hdr,.img"
+            style={{ display: 'none' }}
+            onChange={handleVolumeUpload}
+          />
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={() => volumeInputRef.current?.click()}
+            disabled={isUploadingVolume || isRegistering}
+          >
+            {isUploadingVolume ? 'Loading…' : 'Load Volume'}
+          </button>
+          {volumeName && (
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={handleClearVolume}
+              disabled={isUploadingVolume || isRegistering || isLoading}
+            >
+              Clear Volume
+            </button>
+          )}
           {!interactiveMode && (
             <button type="button" className="primary-btn" onClick={generateDrr} disabled={isLoading}>
               {isLoading ? 'Generating…' : 'Generate DRR'}
@@ -823,9 +1121,21 @@ export default function App() {
         {error ? <p className="error-text">{error}</p> : null}
         <section className="workspace-layout">
           <section className="results-panel">
+            {/* SVG filter for red-channel overlay */}
+            <svg style={{position:'absolute',width:0,height:0}}>
+              <defs>
+                <filter id="red-channel">
+                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+                </filter>
+              </defs>
+            </svg>
             <header className="results-head">
               <h2>Projection</h2>
-              <p className="results-note">{interactiveMode ? 'Auto-updates on pose change.' : 'Click Generate DRR to render.'}</p>
+              <p className="results-note">
+                {isRegistering
+                  ? `Registering… iter ${regProgress?.iteration || 0}`
+                  : interactiveMode ? 'Auto-updates on pose change.' : 'Click Generate DRR to render.'}
+              </p>
             </header>
             <section className="results-grid">
               {displayViews.map((drr) => (
@@ -838,6 +1148,14 @@ export default function App() {
                         {isLoading ? 'Rendering…' : interactiveMode ? 'Adjust pose to generate' : 'Click Generate DRR'}
                       </div>
                     )}
+                    {targetImage && (
+                      <img
+                        src={targetImage}
+                        alt="Target overlay"
+                        className="target-overlay"
+                        style={{ opacity: overlayAlpha }}
+                      />
+                    )}
                     {isLoading && drr.image ? <div className="tile-overlay">Updating…</div> : null}
                   </div>
                   <figcaption>
@@ -846,6 +1164,19 @@ export default function App() {
                 </figure>
               ))}
             </section>
+            {targetImage && (
+              <div className="overlay-controls">
+                <label className="overlay-alpha-label">Overlay</label>
+                <input
+                  type="range"
+                  min={0} max={1} step={0.05}
+                  value={overlayAlpha}
+                  onChange={(e) => setOverlayAlpha(Number(e.target.value))}
+                  className="overlay-alpha-slider"
+                />
+                <span className="overlay-alpha-value">{Math.round(overlayAlpha * 100)}%</span>
+              </div>
+            )}
           </section>
 
           <div className="right-col">
@@ -863,6 +1194,60 @@ export default function App() {
                 }}
               />
             </section>
+            <section className="registration-panel">
+              <h3 className="reg-panel-title">Registration</h3>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/bmp"
+                style={{ display: 'none' }}
+                onChange={handleTargetUpload}
+              />
+              <div className="reg-target-row">
+                {targetImage ? (
+                  <>
+                    <span className="reg-target-status">Target loaded</span>
+                    <button type="button" className="ghost-btn tiny" onClick={clearTarget}>Clear</button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="ghost-btn mini"
+                    onClick={() => fileInputRef.current?.click()}
+                  >Upload Target X-ray</button>
+                )}
+              </div>
+              <div className="reg-metric-row">
+                <label className="reg-metric-label">Metric</label>
+                <select
+                  className="preset-select"
+                  value={selectedMetric}
+                  onChange={(e) => setSelectedMetric(e.target.value)}
+                >
+                  {availableMetrics.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="reg-btn-group">
+                {isRegistering ? (
+                  <button type="button" className="ghost-btn mini reg-cancel-btn" onClick={cancelRegistration}>Cancel</button>
+                ) : (
+                  <button
+                    type="button"
+                    className="primary-btn mini"
+                    disabled={!targetImage}
+                    onClick={startRegistration}
+                  >Start Registration</button>
+                )}
+              </div>
+              {regProgress && (
+                <div className="reg-progress">
+                  <span>Iter: {regProgress.iteration}</span>
+                  <span>Metric: {regProgress.metric_value?.toFixed(4)}</span>
+                </div>
+              )}
+            </section>
             <PoseControlsPanel
               pose={pose}
               onChangePose={updatePose}
@@ -874,6 +1259,13 @@ export default function App() {
               onFetchTransform={fetchTransform}
               extrinsicMatrix={extrinsicMatrix}
               onDismissTransform={() => setExtrinsicMatrix(null)}
+              onOpenIntrinsics={openIntrinsics}
+              intrinsicsOpen={intrinsicsOpen}
+              intrinsicsData={intrinsicsData}
+              onIntrinsicsChange={setIntrinsicsData}
+              onApplyIntrinsics={applyIntrinsics}
+              onResetIntrinsics={resetIntrinsics}
+              onDismissIntrinsics={() => setIntrinsicsOpen(false)}
             />
           </div>
         </section>

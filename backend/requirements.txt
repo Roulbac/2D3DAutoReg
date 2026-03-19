@@ -1,6 +1,0 @@
-fastapi==0.116.1
-uvicorn[standard]==0.35.0
-pillow==11.3.0
-numpy
-torch>=2.9.0
-SimpleITK==2.3.1

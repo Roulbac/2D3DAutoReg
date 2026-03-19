@@ -52,6 +52,8 @@ class DRREngine:
         self.device = _select_device()
         logger.info("DRR engine using device: %s", self.device)
 
+        self._target: np.ndarray | None = None
+
         self._load_volume(nifti_path)
         self._setup_camera()
 
@@ -81,6 +83,21 @@ class DRREngine:
             "Volume loaded: shape=%s, spacing=%s, extent=%s mm",
             vol_np.shape, spacing, self.vol_extent,
         )
+
+    def load_volume(self, path: str) -> None:
+        """Reload the engine with a new NIfTI volume."""
+        self._load_volume(path)
+        self._setup_camera()
+        self._target = None
+
+    def clear_volume(self) -> None:
+        """Unload the current volume and reset state."""
+        self.volume = None
+        self.vol_shape = None
+        self.spacing = None
+        self.vol_extent = None
+        self._target = None
+        logger.info("Volume cleared")
 
     # ------------------------------------------------------------------
     # 2. Auto AP camera (no calibration file needed)
@@ -385,6 +402,64 @@ class DRREngine:
     def get_available_presets(self) -> list[str]:
         """Return list of available camera preset names."""
         return list(self.presets.keys())
+
+    def get_intrinsics(self) -> dict:
+        """Return current camera intrinsics."""
+        K = self.K.cpu().tolist()
+        return {
+            "fx": K[0][0],
+            "fy": K[1][1],
+            "cx": K[0][2],
+            "cy": K[1][2],
+            "image_size": self.image_size,
+            "K": K,
+        }
+
+    def set_intrinsics(self, fx: float, fy: float, cx: float, cy: float) -> None:
+        """Update the intrinsic matrix K and recompute K_inv."""
+        self.K = torch.tensor(
+            [[fx, 0, cx], [0, fy, cy], [0, 0, 1]],
+            dtype=torch.float32, device=self.device,
+        )
+        self.K_inv = torch.inverse(self.K)
+        logger.info("Intrinsics updated: fx=%.2f, fy=%.2f, cx=%.2f, cy=%.2f", fx, fy, cx, cy)
+
+    def reset_intrinsics(self) -> None:
+        """Reset intrinsics to auto-computed defaults from volume extent and SID."""
+        max_extent = float(self.vol_extent.max())
+        pixel_size = max_extent / self.image_size
+        focal_px = self.sid / pixel_size
+        cx = cy = self.image_size / 2.0
+        self.set_intrinsics(focal_px, focal_px, cx, cy)
+        logger.info("Intrinsics reset to defaults")
+
+    # ------------------------------------------------------------------
+    # Target image for registration
+    # ------------------------------------------------------------------
+    def set_target(self, image_bytes: bytes) -> dict:
+        """Decode image bytes, convert to grayscale float32 [0,1], resize to image_size."""
+        img = Image.open(BytesIO(image_bytes)).convert("L")
+        original_size = list(img.size)  # (W, H)
+        img = img.resize((self.image_size, self.image_size), Image.BILINEAR)
+        self._target = np.array(img, dtype=np.float32) / 255.0
+        logger.info("Target image set: original=%s, resized=%dx%d", original_size, self.image_size, self.image_size)
+        return {"width": self.image_size, "height": self.image_size, "original_size": original_size}
+
+    def get_target_base64(self) -> str | None:
+        """Return current target image as base64 PNG data URI, or None."""
+        if self._target is None:
+            return None
+        img_uint8 = (self._target * 255).clip(0, 255).astype(np.uint8)
+        pil_img = Image.fromarray(img_uint8, mode="L")
+        buf = BytesIO()
+        pil_img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        return f"data:image/png;base64,{b64}"
+
+    def clear_target(self) -> None:
+        """Remove the current target image."""
+        self._target = None
+        logger.info("Target image cleared")
 
     def get_scene_info(self, preset: str = "AP") -> dict:
         """Return static scene geometry for the 3D frame sketch."""

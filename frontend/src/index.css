@@ -20,12 +20,13 @@ body {
 .app-shell {
   width: min(1760px, 100%);
   margin: 0 auto;
-  height: 100vh;
+  min-height: 100vh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0.72rem;
   padding: 0.85rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .workspace-wrap {
@@ -142,6 +143,28 @@ body {
   transform: none;
 }
 
+.secondary-btn {
+  border: 1px solid #1565c0;
+  background: #f0f6ff;
+  color: #1565c0;
+  padding: 0.58rem 0.95rem;
+  border-radius: 9px;
+  font-weight: 680;
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.secondary-btn:hover { background: #ddeafc; transform: translateY(-1px); }
+.secondary-btn:disabled { opacity: 0.76; cursor: not-allowed; transform: none; }
+
+.volume-name {
+  font-size: 0.78rem;
+  color: #5a7a9a;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ghost-btn {
   border: 1px solid #c7d4e4;
   background: #f8fbff;
@@ -234,11 +257,11 @@ body {
 /* ── Workspace: DRR (left, full height) + right column ───── */
 
 .workspace-layout {
-  min-height: 0;
+  min-height: 400px;
   flex: 1;
   display: grid;
   grid-template-columns: 1fr auto;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: minmax(400px, 1fr);
   gap: 0.76rem;
 }
 
@@ -304,7 +327,7 @@ body {
 }
 
 .drr-viewport {
-  min-height: 0;
+  min-height: 280px;
   border-radius: 8px;
   background: radial-gradient(circle at 50% 26%, #111821 0%, #090d13 100%);
   position: relative;
@@ -425,7 +448,7 @@ body {
 .frame-canvas-wrap {
   width: 100%;
   height: 100%;
-  min-height: 0;
+  min-height: 200px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #ccd9e8;
@@ -741,6 +764,151 @@ body {
   overflow-x: auto;
 }
 
+/* ── Target overlay on projection ─────────────────────────── */
+
+.target-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: url(#red-channel);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.overlay-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.overlay-alpha-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4a6a8a;
+  min-width: 3rem;
+}
+
+.overlay-alpha-slider {
+  flex: 1;
+  accent-color: #ff5a4f;
+  height: 4px;
+}
+
+.overlay-alpha-value {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.68rem;
+  color: #4a6a8a;
+  min-width: 2.2rem;
+  text-align: right;
+}
+
+/* ── Registration panel ──────────────────────────────────── */
+
+.registration-panel {
+  background: #fff;
+  border: 1px solid #dde8f3;
+  border-radius: 14px;
+  padding: 0.7rem 0.9rem;
+}
+
+.reg-panel-title {
+  margin: 0 0 0.4rem;
+  font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a3148;
+}
+
+.reg-target-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.reg-target-status {
+  font-size: 0.72rem;
+  color: #2f9a5f;
+  font-weight: 600;
+}
+
+.reg-metric-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.reg-metric-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4a6a8a;
+  min-width: 2.8rem;
+}
+
+.reg-btn-group {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.reg-cancel-btn {
+  color: #ff5a4f !important;
+  border-color: #ff5a4f !important;
+}
+
+.reg-progress {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.4rem;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.68rem;
+  color: #4a6a8a;
+}
+
+/* ── Intrinsics modal ─────────────────────────────────────── */
+
+.intrinsics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.intrinsics-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.intrinsics-field-label {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.72rem;
+  color: #4a6a8a;
+  font-weight: 600;
+}
+
+.intrinsics-field-input {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid #cedbe9;
+  border-radius: 6px;
+  background: #f9fbfd;
+  color: #1a3148;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.intrinsics-field-input:focus {
+  outline: none;
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.15);
+}
+
 /* ── Animations ───────────────────────────────────────────── */
 
 @keyframes shimmer {
@@ -763,10 +931,14 @@ body {
   .topbar-status  { grid-area: status; }
   .topbar-actions { grid-area: actions; align-self: center; }
 
-  /* Stack: DRR full-width, frame hidden or below, pose full-width */
+  /* Stack: DRR full-width, right-col full-width below */
   .workspace-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto;
+  }
+
+  .right-col {
+    width: 100%;
   }
 
   .pose-panel {
