@@ -4,6 +4,7 @@ import { Line, OrbitControls, Text } from '@react-three/drei'
 import * as THREE from 'three'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const WS_BASE = API_BASE.replace(/^http/, 'ws')
 
 const TRANSLATION_PARAMS = [
   { key: 'tx', label: 'Tx', step: 1, unit: 'mm', group: 'translation' },
@@ -737,6 +738,7 @@ export default function App() {
   const [availableMetrics, setAvailableMetrics] = React.useState(['ncc'])
   const [isRegistering, setIsRegistering] = React.useState(false)
   const [regProgress, setRegProgress] = React.useState(null)
+  const [sessionReady, setSessionReady] = React.useState(false)
 
   const debounceTimerRef = React.useRef(null)
   const abortControllerRef = React.useRef(null)
@@ -745,13 +747,86 @@ export default function App() {
   const [volumeName, setVolumeName] = React.useState(null)
   const [isUploadingVolume, setIsUploadingVolume] = React.useState(false)
 
-  // Fetch static scene geometry from backend on mount or preset change
+  // --- WebSocket session management ---
+  const sessionIdRef = React.useRef(null)
+  const wsRef = React.useRef(null)
+
+  const apiUrl = React.useCallback((path) => {
+    const sep = path.includes('?') ? '&' : '?'
+    return `${API_BASE}${path}${sep}session_id=${sessionIdRef.current}`
+  }, [])
+
   React.useEffect(() => {
-    fetch(`${API_BASE}/api/scene?preset=${preset}`)
+    let ws
+    let reconnectTimer
+    let disposed = false
+
+    function connect() {
+      ws = new WebSocket(`${WS_BASE}/ws`)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        console.log('WebSocket connected')
+      }
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data)
+        if (msg.type === 'session_start') {
+          sessionIdRef.current = msg.session_id
+          setSessionReady(true)
+          console.log('Session started:', msg.session_id)
+        } else if (msg.type === 'progress') {
+          const progress = msg.data
+          setRegProgress({ iteration: progress.iteration, metric_value: progress.metric_value })
+          setDrrs([{ view: 'Registration', image: progress.drr }])
+          setPose(progress.pose)
+        } else if (msg.type === 'complete') {
+          const result = msg.data
+          setRegProgress({ iteration: result.iterations, metric_value: result.metric_value })
+          setDrrs([{ view: 'Registration', image: result.drr }])
+          setPose(result.pose)
+          setIsRegistering(false)
+        } else if (msg.type === 'cancelled') {
+          setIsRegistering(false)
+        } else if (msg.type === 'error') {
+          setError(msg.data?.message || msg.message || 'Unknown error')
+          setIsRegistering(false)
+        }
+      }
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected')
+        wsRef.current = null
+        sessionIdRef.current = null
+        setSessionReady(false)
+        if (!disposed) {
+          reconnectTimer = setTimeout(connect, 2000)
+        }
+      }
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err)
+        ws.close()
+      }
+    }
+
+    connect()
+
+    return () => {
+      disposed = true
+      clearTimeout(reconnectTimer)
+      if (ws) ws.close()
+    }
+  }, [])
+
+  // Fetch static scene geometry from backend once session is ready, and on preset change
+  React.useEffect(() => {
+    if (!sessionReady) return
+    fetch(apiUrl(`/api/scene?preset=${preset}`))
       .then((r) => r.json())
       .then(setSceneInfo)
       .catch((err) => console.error('Failed to fetch scene info:', err))
-  }, [preset])
+  }, [preset, sessionReady, apiUrl])
 
   // Fetch available registration metrics on mount
   React.useEffect(() => {
@@ -804,7 +879,7 @@ export default function App() {
     setIsLoading(true)
     setError('')
     try {
-      const response = await fetch(`${API_BASE}/api/drr/generate`, {
+      const response = await fetch(apiUrl('/api/drr/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -820,14 +895,14 @@ export default function App() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [apiUrl])
 
   const generateDrr = () => fetchDrr(posePayload)
 
   // Fetch the full 4x4 world-to-camera extrinsic matrix
   const fetchTransform = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/camera/transform`, {
+      const response = await fetch(apiUrl('/api/camera/transform'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pose, preset }),
@@ -843,7 +918,7 @@ export default function App() {
   // Fetch and open intrinsics modal
   const openIntrinsics = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/intrinsics`)
+      const response = await fetch(apiUrl('/api/intrinsics'))
       if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
       const data = await response.json()
       setIntrinsicsData({ fx: data.fx, fy: data.fy, cx: data.cx, cy: data.cy })
@@ -856,7 +931,7 @@ export default function App() {
   const applyIntrinsics = async () => {
     if (!intrinsicsData) return
     try {
-      const response = await fetch(`${API_BASE}/api/intrinsics`, {
+      const response = await fetch(apiUrl('/api/intrinsics'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(intrinsicsData),
@@ -877,7 +952,7 @@ export default function App() {
 
   const resetIntrinsics = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/intrinsics/reset`, { method: 'POST' })
+      const response = await fetch(apiUrl('/api/intrinsics/reset'), { method: 'POST' })
       if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
       const data = await response.json()
       setIntrinsicsData({ fx: data.fx, fy: data.fy, cx: data.cx, cy: data.cy })
@@ -895,7 +970,7 @@ export default function App() {
     const formData = new FormData()
     formData.append('file', file)
     try {
-      const response = await fetch(`${API_BASE}/api/volume/upload`, {
+      const response = await fetch(apiUrl('/api/volume/upload'), {
         method: 'POST',
         body: formData,
       })
@@ -919,7 +994,7 @@ export default function App() {
   const handleClearVolume = async () => {
     setError(null)
     try {
-      const response = await fetch(`${API_BASE}/api/volume/clear`, { method: 'POST' })
+      const response = await fetch(apiUrl('/api/volume/clear'), { method: 'POST' })
       if (!response.ok) {
         const err = await response.json().catch(() => ({}))
         throw new Error(err.detail || 'Failed to clear volume')
@@ -939,7 +1014,7 @@ export default function App() {
     const formData = new FormData()
     formData.append('file', file)
     try {
-      const response = await fetch(`${API_BASE}/api/registration/target`, {
+      const response = await fetch(apiUrl('/api/registration/target'), {
         method: 'POST',
         body: formData,
       })
@@ -955,90 +1030,34 @@ export default function App() {
 
   const clearTarget = async () => {
     try {
-      await fetch(`${API_BASE}/api/registration/target`, { method: 'DELETE' })
+      await fetch(apiUrl('/api/registration/target'), { method: 'DELETE' })
       setTargetImage(null)
     } catch (err) {
       setError(err.message || 'Failed to clear target')
     }
   }
 
-  const startRegistration = async () => {
+  const startRegistration = () => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setError('WebSocket not connected')
+      return
+    }
     setIsRegistering(true)
     setRegProgress(null)
     setError('')
-    try {
-      const response = await fetch(`${API_BASE}/api/registration/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pose, preset, threshold,
-          metric: selectedMetric,
-          report_every_n: 5,
-        }),
-      })
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}))
-        throw new Error(errData.detail || `Registration failed with status ${response.status}`)
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        const events = buffer.split('\n\n')
-        buffer = events.pop() // keep incomplete event
-
-        for (const eventStr of events) {
-          if (!eventStr.trim()) continue
-          const lines = eventStr.split('\n')
-          let eventType = 'message'
-          let data = ''
-          for (const line of lines) {
-            if (line.startsWith('event: ')) eventType = line.slice(7)
-            if (line.startsWith('data: ')) data = line.slice(6)
-          }
-          if (!data) continue
-
-          if (eventType === 'progress') {
-            const progress = JSON.parse(data)
-            setRegProgress({ iteration: progress.iteration, metric_value: progress.metric_value })
-            setDrrs([{ view: 'Registration', image: progress.drr }])
-            setPose(progress.pose)
-          } else if (eventType === 'complete') {
-            const result = JSON.parse(data)
-            setRegProgress({ iteration: result.iterations, metric_value: result.metric_value })
-            setDrrs([{ view: 'Registration', image: result.drr }])
-            setPose(result.pose)
-            setIsRegistering(false)
-          } else if (eventType === 'cancelled') {
-            setIsRegistering(false)
-          } else if (eventType === 'error') {
-            const err = JSON.parse(data)
-            setError(err.message)
-            setIsRegistering(false)
-          }
-        }
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setError(err.message || 'Registration failed')
-      }
-    } finally {
-      setIsRegistering(false)
-    }
+    ws.send(JSON.stringify({
+      type: 'registration_start',
+      pose, preset, threshold,
+      metric: selectedMetric,
+      report_every_n: 5,
+    }))
   }
 
-  const cancelRegistration = async () => {
-    try {
-      await fetch(`${API_BASE}/api/registration/cancel`, { method: 'POST' })
-    } catch (err) {
-      console.error('Failed to cancel registration:', err)
-    }
+  const cancelRegistration = () => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    ws.send(JSON.stringify({ type: 'registration_cancel' }))
   }
 
   // Interactive mode: auto-generate DRR on pose change with debounce + abort

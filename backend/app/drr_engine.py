@@ -9,6 +9,7 @@ import logging
 import math
 from io import BytesIO
 
+import nibabel as nib
 import numpy as np
 import SimpleITK as sitk
 import torch
@@ -57,6 +58,28 @@ class DRREngine:
         self._load_volume(nifti_path)
         self._setup_camera()
 
+    @classmethod
+    def from_bytes(
+        cls,
+        data: bytes,
+        filename: str = "upload.nii.gz",
+        image_size: int = DEFAULT_IMAGE_SIZE,
+        sid: float = DEFAULT_SID,
+        threshold: float = DEFAULT_HU_THRESHOLD,
+        num_samples: int = NUM_SAMPLES,
+    ) -> "DRREngine":
+        """Create a DRREngine from in-memory NIfTI bytes (no disk I/O)."""
+        instance = cls.__new__(cls)
+        instance.image_size = image_size
+        instance.sid = sid
+        instance.threshold = threshold
+        instance.num_samples = num_samples
+        instance.device = _select_device()
+        instance._target = None
+        logger.info("DRR engine using device: %s", instance.device)
+        instance.load_volume_from_bytes(data, filename)
+        return instance
+
     # ------------------------------------------------------------------
     # 1. Volume loading
     # ------------------------------------------------------------------
@@ -89,6 +112,39 @@ class DRREngine:
         self._load_volume(path)
         self._setup_camera()
         self._target = None
+
+    def load_volume_from_bytes(self, data: bytes, filename: str = "upload.nii.gz") -> None:
+        """Load a NIfTI volume from in-memory bytes (no disk write)."""
+        logger.info("Loading volume from %d bytes (%s) …", len(data), filename)
+        fh = nib.FileHolder(fileobj=BytesIO(data))
+        if filename.endswith(".gz"):
+            img = nib.Nifti1Image.from_file_map({"header": fh, "image": fh})
+        else:
+            img = nib.Nifti1Image.from_file_map({"header": fh, "image": fh})
+        spacing = np.array(img.header.get_zooms()[:3], dtype=np.float32)
+        # nibabel returns (X, Y, Z) when using get_fdata with canonical orientation
+        vol_np = np.asarray(img.dataobj, dtype=np.float32)
+        # nibabel native shape is (X, Y, Z) already — same as our convention
+        # but we need to ensure LPS-like orientation matches SimpleITK's output
+        # SimpleITK returns (Z, Y, X) then we transpose to (X, Y, Z)
+        # nibabel get_fdata returns in the file's native orientation (usually RAS)
+        # Use canonical to get a consistent (X, Y, Z) in RAS, which we keep as-is
+        # since the DRR renderer only cares about shape/spacing/extent
+        self.vol_shape = np.array(vol_np.shape[:3], dtype=np.float32)
+        self.spacing = spacing
+        self.vol_extent = self.vol_shape * self.spacing
+        self.volume = (
+            torch.from_numpy(vol_np)
+            .unsqueeze(0)
+            .unsqueeze(0)
+            .to(self.device)
+        )
+        self._setup_camera()
+        self._target = None
+        logger.info(
+            "Volume loaded from bytes: shape=%s, spacing=%s, extent=%s mm",
+            vol_np.shape, spacing, self.vol_extent,
+        )
 
     def clear_volume(self) -> None:
         """Unload the current volume and reset state."""
