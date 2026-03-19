@@ -1,39 +1,43 @@
-# 2D3DAutoReg - Phase 1 Web Split
+# 2D3DAutoReg — DRR Workbench
 
-This repository now includes a Phase 1 modernization setup:
-- `frontend/`: React UI with pose sliders + "Generate DRR" button.
-- `backend/`: FastAPI stub that returns fixed placeholder DRR images.
-- `docker-compose.yml`: Runs both services.
+Web-based 2D/3D image registration tool. Load a CT volume (NIfTI), render Digitally Reconstructed Radiographs (DRRs) at arbitrary 6-DOF camera poses, and run automatic pose registration against a target X-ray.
 
-Legacy desktop code remains in the root Python modules.
-
-## Run with Docker Compose
+## Quick Start
 
 ```bash
 docker compose up --build
 ```
 
-Then open:
 - Frontend: [http://localhost:3000](http://localhost:3000)
-- Backend health: [http://localhost:8000/health](http://localhost:8000/health)
+- Backend: [http://localhost:8000/health](http://localhost:8000/health)
 
-## API Contract (Phase 1)
+## Local Development
 
-`POST /api/drr/generate`
+```bash
+# Backend (requires Python 3.12+, uv)
+cd backend
+uv sync
+NIFTI_PATH=../sample_data/HN_P001.nii.gz uv run uvicorn app.main:app --reload --port 8000
 
-Request:
-
-```json
-{
-  "pose": {
-    "tx": 0,
-    "ty": 0,
-    "tz": 0,
-    "rx": 0,
-    "ry": 0,
-    "rz": 0
-  }
-}
+# Frontend (requires Node 20+)
+cd frontend
+npm install && npm run dev
 ```
 
-Response: deterministic placeholder DRR images for 4 views.
+Or use `make dev` to run both concurrently.
+
+## Features
+
+- **DRR Rendering** — PyTorch cone-beam renderer with Beer-Lambert attenuation, configurable HU threshold
+- **Camera Presets** — AP, Lateral, PA views with full 6-DOF pose control
+- **3D Scene View** — Interactive Three.js visualization of CT volume and camera geometry
+- **Registration** — Scipy Powell optimizer with 4 similarity metrics (NCC, gradient correlation, MRSD, MI), SSE-streamed live progress
+- **Volume Upload** — Swap CT volumes at runtime via the UI
+
+## Stack
+
+| Layer | Tech |
+|-------|------|
+| Frontend | React, Three.js (@react-three/fiber), Vite |
+| Backend | FastAPI, PyTorch, SimpleITK, scipy |
+| Packaging | uv (backend), npm (frontend), Docker Compose |
