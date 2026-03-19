@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "dev",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["dev"],
+      "port": 3000
+    },
+    {
       "name": "docker-compose",
       "runtimeExecutable": "docker",
       "runtimeArgs": ["compose", "up", "--build"],

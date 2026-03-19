@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Physics constants (from legacy raybox.py)
 MU_WATER = 0.037
 MU_AIR = 0.00046
-DEFAULT_HU_THRESHOLD = 500
+DEFAULT_HU_THRESHOLD = 300
 DEFAULT_SID = 1000.0  # Source-to-Image Distance in mm
 DEFAULT_IMAGE_SIZE = 512
 NUM_SAMPLES = 256
@@ -86,7 +86,7 @@ class DRREngine:
     # 2. Auto AP camera (no calibration file needed)
     # ------------------------------------------------------------------
     def _setup_camera(self) -> None:
-        """Build intrinsic K and extrinsic M for an AP camera from volume extent."""
+        """Build intrinsic K and camera presets from volume extent."""
         # Volume centroid in world coordinates (origin at corner)
         self.centroid = torch.tensor(
             self.vol_extent / 2.0, dtype=torch.float32, device=self.device
@@ -110,22 +110,54 @@ class DRREngine:
         )
         self.K_inv = torch.inverse(self.K)
 
-        # Default camera extrinsic: source above centroid along Y axis
-        # Camera looks down -Z in camera space; we orient so that camera
-        # Z axis points along -Y in world (AP view looking anterior→posterior)
-        # Camera position: centroid + SID along Y
-        self.default_source = self.centroid.clone()
-        self.default_source[1] = self.centroid[1] + self.sid
+        # --- Camera presets ---------------------------------------------------
+        # Each preset: (default_source, default_R_w2c)
 
-        # Camera rotation: world-to-camera
-        # Camera x = world x, camera y = world -z, camera z = world -y
-        # (source above, looking down Y toward centroid)
-        self.default_R = torch.tensor(
+        # AP: Source on Anterior side (-Y in LPS), beam toward Posterior (+Y)
+        source_ap = self.centroid.clone()
+        source_ap[1] = self.centroid[1] - self.sid
+        R_ap = torch.tensor(
+            [[-1.0, 0.0, 0.0],
+             [0.0, 0.0, -1.0],
+             [0.0, -1.0, 0.0]],
+            dtype=torch.float32, device=self.device,
+        )
+
+        # LAT (Lateral): Source on Left side (+X in LPS), beam toward Right (-X)
+        # Row 2 (cam-Z) = opposite of beam [-1,0,0] → [+1,0,0]
+        # Row 1 (cam-Y) = -Superior → [0,0,-1]
+        # Row 0 (cam-X) = cam-Y × cam-Z = [0,0,-1]×[1,0,0] = [0,-1,0]
+        source_lat = self.centroid.clone()
+        source_lat[0] = self.centroid[0] + self.sid
+        R_lat = torch.tensor(
+            [[0.0, -1.0, 0.0],
+             [0.0, 0.0, -1.0],
+             [1.0, 0.0, 0.0]],
+            dtype=torch.float32, device=self.device,
+        )
+
+        # PA: Source on Posterior side (+Y in LPS), beam toward Anterior (-Y)
+        # Row 2 (cam-Z) = opposite of beam [0,-1,0] → [0,+1,0]
+        # Row 1 (cam-Y) = -Superior → [0,0,-1]
+        # Row 0 (cam-X) = cam-Y × cam-Z = [0,0,-1]×[0,1,0] = [1,0,0]
+        source_pa = self.centroid.clone()
+        source_pa[1] = self.centroid[1] + self.sid
+        R_pa = torch.tensor(
             [[1.0, 0.0, 0.0],
              [0.0, 0.0, -1.0],
              [0.0, 1.0, 0.0]],
             dtype=torch.float32, device=self.device,
         )
+
+        self.presets = {
+            "AP": (source_ap, R_ap),
+            "LAT": (source_lat, R_lat),
+            "PA": (source_pa, R_pa),
+        }
+
+        # Backwards-compat aliases
+        self.default_source = source_ap
+        self.default_R = R_ap
 
     # ------------------------------------------------------------------
     # 3. Pose composition
@@ -151,21 +183,31 @@ class DRREngine:
         return Rz @ Ry @ Rx
 
     def _apply_pose(self, tx: float, ty: float, tz: float,
-                    rx: float, ry: float, rz: float):
-        """Return (source_world, R_world2cam) after applying the 6-DOF pose.
+                    rx: float, ry: float, rz: float,
+                    preset: str = "AP"):
+        """Return (source_world, R_world2cam) after applying camera-relative 6-DOF pose.
 
-        The pose rotation is applied centered on the volume centroid,
-        then translation is added.
+        Perturbations are in the camera's own coordinate frame:
+        - tx/ty/tz translate along camera X/Y/Z axes
+        - rx/ry/rz rotate around camera X/Y/Z axes (orbiting the volume centroid)
         """
-        R_pose = self._euler_to_rotation(rx, ry, rz, self.device)
-        t_pose = torch.tensor([tx, ty, tz], dtype=torch.float32, device=self.device)
+        default_source, default_R = self.presets[preset]
 
-        # Rotate the default source position around centroid, then translate
-        source_rel = self.default_source - self.centroid
-        source_world = R_pose @ source_rel + self.centroid + t_pose
+        # Camera-relative rotation → conjugate to world frame
+        R_local = self._euler_to_rotation(rx, ry, rz, self.device)
+        R_world = default_R.T @ R_local @ default_R
 
-        # Compose rotations: world-to-camera = default_R · R_pose^T
-        R_w2c = self.default_R @ R_pose.T
+        # Orbit source around centroid using world-frame rotation
+        source_rel = default_source - self.centroid
+        source_rotated = R_world @ source_rel + self.centroid
+
+        # Camera-relative translation → convert to world via posed R_c2w
+        R_w2c = default_R @ R_world.T
+        R_c2w = R_w2c.T
+        t_cam = torch.tensor([tx, ty, tz], dtype=torch.float32, device=self.device)
+        t_world = R_c2w @ t_cam
+
+        source_world = source_rotated + t_world
 
         return source_world, R_w2c
 
@@ -246,6 +288,7 @@ class DRREngine:
         t_near: torch.Tensor,
         t_far: torch.Tensor,
         valid: torch.Tensor,
+        threshold: float | None = None,
     ) -> torch.Tensor:
         """Sample the volume along rays and accumulate attenuation.
 
@@ -264,8 +307,8 @@ class DRREngine:
         tn = t_near[valid_idx]        # (Nv,)
         tf = t_far[valid_idx]         # (Nv,)
 
-        # Tile size for memory management
-        tile_size = 4096 if self.device.type == "cpu" else len(valid_idx)
+        # Tile size for memory management (MPS also needs tiling)
+        tile_size = 4096 if self.device.type in ("cpu", "mps") else len(valid_idx)
         accumulated = torch.zeros(len(valid_idx), dtype=torch.float32, device=self.device)
 
         for start in range(0, len(valid_idx), tile_size):
@@ -309,7 +352,8 @@ class DRREngine:
 
             # Apply HU threshold and convert to linear attenuation
             mu = (hu_values * (MU_WATER - MU_AIR) / 1000.0 + MU_WATER)
-            mu = mu * (hu_values >= self.threshold).float()
+            hu_threshold = threshold if threshold is not None else self.threshold
+            mu = mu * (hu_values >= hu_threshold).float()
 
             # Physical step length in mm
             ray_len = (tf_t - tn_t)  # (T,)
@@ -338,20 +382,84 @@ class DRREngine:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    def get_available_presets(self) -> list[str]:
+        """Return list of available camera preset names."""
+        return list(self.presets.keys())
+
+    def get_scene_info(self, preset: str = "AP") -> dict:
+        """Return static scene geometry for the 3D frame sketch."""
+        default_source, default_R = self.presets[preset]
+        centroid = self.centroid.cpu().tolist()
+        vol_extent = self.vol_extent.tolist()
+        source = default_source.cpu().tolist()
+        R_c2w = default_R.T
+        return {
+            "volume": {
+                "centroid": centroid,
+                "extent": vol_extent,
+            },
+            "camera": {
+                "source": source,
+                "sid": self.sid,
+                "basis": {
+                    "x": R_c2w[:, 0].cpu().tolist(),
+                    "y": R_c2w[:, 1].cpu().tolist(),
+                    "z": R_c2w[:, 2].cpu().tolist(),
+                },
+            },
+            "available_presets": self.get_available_presets(),
+        }
+
+    def get_posed_camera(
+        self,
+        tx: float = 0, ty: float = 0, tz: float = 0,
+        rx: float = 0, ry: float = 0, rz: float = 0,
+        preset: str = "AP",
+    ) -> dict:
+        """Return camera position and basis after applying a 6-DOF pose."""
+        with torch.no_grad():
+            source, R_w2c = self._apply_pose(tx, ty, tz, rx, ry, rz, preset)
+        R_c2w = R_w2c.T
+        return {
+            "source": source.cpu().tolist(),
+            "basis": {
+                "x": R_c2w[:, 0].cpu().tolist(),
+                "y": R_c2w[:, 1].cpu().tolist(),
+                "z": R_c2w[:, 2].cpu().tolist(),
+            },
+        }
+
+    def get_extrinsic_4x4(
+        self,
+        tx: float = 0, ty: float = 0, tz: float = 0,
+        rx: float = 0, ry: float = 0, rz: float = 0,
+        preset: str = "AP",
+    ) -> list[list[float]]:
+        """Return the full 4x4 world-to-camera extrinsic matrix."""
+        with torch.no_grad():
+            source, R_w2c = self._apply_pose(tx, ty, tz, rx, ry, rz, preset)
+        t = -R_w2c @ source
+        M = torch.eye(4, dtype=torch.float32, device=self.device)
+        M[:3, :3] = R_w2c
+        M[:3, 3] = t
+        return M.cpu().tolist()
+
     def render(
         self,
         tx: float = 0, ty: float = 0, tz: float = 0,
         rx: float = 0, ry: float = 0, rz: float = 0,
+        preset: str = "AP",
+        threshold: float | None = None,
     ) -> np.ndarray:
         """Render a single DRR at the given 6-DOF pose.
 
         Returns a (image_size, image_size) float32 numpy array in [0, 1].
         """
         with torch.no_grad():
-            source, R_w2c = self._apply_pose(tx, ty, tz, rx, ry, rz)
+            source, R_w2c = self._apply_pose(tx, ty, tz, rx, ry, rz, preset)
             origins, dirs = self._generate_rays(source, R_w2c)
             t_near, t_far, valid = self._aabb_intersect(origins, dirs)
-            intensities = self._sample_and_accumulate(origins, dirs, t_near, t_far, valid)
+            intensities = self._sample_and_accumulate(origins, dirs, t_near, t_far, valid, threshold=threshold)
 
         img = intensities.cpu().numpy().reshape(self.image_size, self.image_size)
 
@@ -369,7 +477,9 @@ class DRREngine:
         self,
         tx: float = 0, ty: float = 0, tz: float = 0,
         rx: float = 0, ry: float = 0, rz: float = 0,
+        preset: str = "AP",
+        threshold: float | None = None,
     ) -> str:
         """Render a DRR and return as a base64 PNG data URI."""
-        img = self.render(tx, ty, tz, rx, ry, rz)
+        img = self.render(tx, ty, tz, rx, ry, rz, preset, threshold=threshold)
         return self._encode_png_base64(img)
