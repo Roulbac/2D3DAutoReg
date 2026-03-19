@@ -67,3 +67,36 @@ The real DRR computation logic lives in root-level Python files — not yet inte
 ### Modernization Roadmap
 Phase 1 (current): UI + stub API + Docker
 Phase 2 (next): Wire real DRR computation from legacy code into the FastAPI backend
+
+## Git Worktree Gotcha
+
+When Claude Code works inside a **git worktree** (`.claude/worktrees/<name>`), the `.git` entry is a *file* (not a folder) containing a pointer like:
+
+```
+gitdir: /path/to/repo.git/worktrees/<name>
+```
+
+Git can resolve the metadata from this pointer, but it cannot infer the working-tree path from the Bash tool's CWD (which is outside the worktree). Plain `git` commands will fail with:
+
+```
+fatal: this operation must be run in a work tree
+```
+
+**Fix:** always prefix git commands with both environment variables:
+
+```bash
+GIT_DIR=/Users/reda/Projects/2D3DAutoReg.git/worktrees/nostalgic-poitras \
+GIT_WORK_TREE=/Users/reda/Projects/2D3DAutoReg.git/main/.claude/worktrees/nostalgic-poitras \
+git <command>
+```
+
+Or export them once at the top of a multi-command script:
+
+```bash
+export GIT_DIR=...  GIT_WORK_TREE=...
+git status
+git add ...
+git commit ...
+```
+
+This is required for the entire duration of a worktree session because the Bash tool's working directory never changes to the worktree path automatically.
