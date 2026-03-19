@@ -34,7 +34,7 @@ export VITE_API_BASE_URL := http://localhost:$(BACKEND_PORT)
 # ── Phony targets ───────────────────────────────────────────────────
 
 .PHONY: install install-backend install-frontend \
-        dev backend frontend docker clean check-data help
+        dev backend frontend docker clean check-data check-uv help
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -44,11 +44,11 @@ help: ## Show this help
 
 install: install-backend install-frontend ## Install all dependencies
 
-install-backend: $(VENV_DIR)/bin/activate ## Install backend (Python venv)
-$(VENV_DIR)/bin/activate:
-	python3 -m venv $(VENV_DIR)
-	$(PIP) install --upgrade pip
-	$(PIP) install -r $(BACKEND_DIR)/requirements.txt
+install-backend: check-uv ## Install backend with uv
+	cd $(BACKEND_DIR) && uv sync
+
+check-uv: ## Check that uv is installed
+	@command -v uv >/dev/null 2>&1 || { echo "Error: uv is not installed. Install from https://docs.astral.sh/uv/getting-started/"; exit 1; }
 
 install-frontend: $(FRONTEND_DIR)/node_modules ## Install frontend (npm)
 $(FRONTEND_DIR)/node_modules: $(FRONTEND_DIR)/package.json
