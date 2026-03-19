@@ -33,9 +33,9 @@ const PLACEHOLDER_VIEWS = [{ view: 'Main View' }]
 
 const MM_TO_SCENE = 0.115
 const FRAME_CAMERA_DEFAULT = {
-  position: [22, 5, -6.9],
-  target: [0, 0.46, -6.9],
-  fov: 46,
+  position: [10, 6, 12],
+  target: [0, 0, -2],
+  fov: 48,
 }
 
 const toRad = (deg) => (deg * Math.PI) / 180
