@@ -42,21 +42,22 @@ make dev          # Run backend + frontend concurrently
 
 | Module | Purpose |
 |--------|---------|
-| `main.py` | FastAPI app with all endpoints, lifespan volume loading, SSE streaming for registration |
-| `drr_engine.py` | PyTorch cone-beam DRR renderer: volume loading (SimpleITK), ray generation, AABB intersection, trilinear `grid_sample`, Beer-Lambert accumulation |
-| `registration.py` | Background scipy Powell optimizer with SSE progress streaming, early convergence detection (patience-based stale metric check) |
+| `main.py` | FastAPI app with REST endpoints, WebSocket session lifecycle, registration streaming |
+| `session_manager.py` | Per-session state management: Session dataclass, SessionManager with create/destroy/cleanup |
+| `drr_engine.py` | PyTorch cone-beam DRR renderer: volume loading (SimpleITK/nibabel), ray generation, AABB intersection, trilinear `grid_sample`, Beer-Lambert accumulation |
+| `registration.py` | Background scipy Powell optimizer with queue-based progress streaming, early convergence detection (patience-based stale metric check) |
 | `metrics.py` | Image similarity metrics: NCC, gradient correlation, mean reciprocal squared difference, mutual information |
 
-**Global state:** singleton `DRREngine` instance and optional `RegistrationRunner` thread, initialized in FastAPI lifespan.
+**Multi-user sessions:** Each browser tab opens a WebSocket to `/ws`, which creates an independent `Session` with its own `DRREngine` and `RegistrationRunner`. Sessions are destroyed on WebSocket disconnect. A background reaper cleans up stale sessions after 1 hour.
 
 **Device selection:** CUDA → MPS → CPU (auto-detected at startup). PyTorch ≥2.10 required for native MPS `grid_sample` support.
 
-**Key API endpoints:**
+**Key API endpoints** (all REST endpoints take `session_id` query param):
 - `POST /api/drr/generate` — render DRR at pose, returns base64 PNG
-- `POST /api/registration/start` — SSE stream of optimization progress
-- `POST /api/volume/upload` — replace CT volume at runtime
+- `POST /api/volume/upload` — upload CT volume (in-memory, no disk write)
 - `GET/PUT /api/intrinsics` — camera K matrix
 - `GET /api/scene` — volume extent + camera geometry for 3D widget
+- `WS /ws` — session lifecycle, registration start/cancel/progress streaming
 
 ### Frontend (`frontend/src/`)
 
@@ -66,7 +67,7 @@ Single-page React app in `App.jsx`. No external state manager — all state via 
 - `FrameIllustration` — Three.js 3D scene showing CT volume wireframe, camera frustum, and posed camera axes
 - Pose panel — 6-DOF controls (Tx/Ty/Tz mm, Rx/Ry/Rz degrees) with presets (AP, LAT, PA)
 - Results panel — DRR display with target overlay and opacity slider
-- Registration panel — target upload, metric selector, start/cancel with live SSE progress
+- Registration panel — target upload, metric selector, start/cancel with live WebSocket progress
 
 **Coordinate systems:**
 - Backend uses LPS (Left-Posterior-Superior): X=right, Y=anterior, Z=superior
@@ -83,6 +84,6 @@ Single-page React app in `App.jsx`. No external state manager — all state via 
 ## Key Technical Details
 
 - DRR rendering processes rays in tiles (4096 on CPU/MPS) to manage memory; CUDA processes all rays at once
-- Registration streams intermediate results via SSE every N function evaluations; frontend auto-updates pose controls from the stream
+- Registration streams intermediate results via WebSocket every N function evaluations; frontend auto-updates pose controls from the stream
 - Volume can be swapped at runtime via upload endpoint; the engine reinitializes camera geometry from the new NIfTI header
 - Beer-Lambert law: `intensity = exp(-∫μ(x)ds)` where μ is derived from HU values above a configurable threshold
