@@ -61,9 +61,6 @@ def generate_drr(payload: DrrRequest) -> dict:
     return {
         "pose": payload.pose.model_dump(),
         "drrs": [
-            {"view": 1, "image": drr_data_url},
-            {"view": 2, "image": drr_data_url},
-            {"view": 3, "image": drr_data_url},
-            {"view": 4, "image": drr_data_url},
+            {"view": "Main View", "image": drr_data_url},
         ],
     }

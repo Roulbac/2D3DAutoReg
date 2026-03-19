@@ -11,18 +11,28 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  height: 100%;
 }
 
 .app-shell {
   width: min(1760px, 100%);
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0.72rem;
   padding: 0.85rem;
+  overflow: hidden;
+}
+
+.workspace-wrap {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.72rem;
 }
 
 .eyebrow {
@@ -167,13 +177,23 @@ body {
   font-size: 0.82rem;
 }
 
+/* ── Workspace: 2-col top row + full-width bottom row ─────── */
+
 .workspace-layout {
   min-height: 0;
+  flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.64fr) minmax(420px, 1fr);
+  grid-template-columns: 4fr 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 0.76rem;
-  align-items: stretch;
 }
+
+/* Pose panel spans both columns in row 2 */
+.pose-panel {
+  grid-column: 1 / -1;
+}
+
+/* ── DRR Results panel ────────────────────────────────────── */
 
 .results-panel {
   background: linear-gradient(180deg, #ffffff 0%, #f9fcff 100%);
@@ -202,17 +222,14 @@ body {
 
 .results-note {
   margin: 0;
-  max-width: 24rem;
   color: #5b7390;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   text-align: right;
 }
 
 .results-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 0.52rem;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -294,18 +311,13 @@ body {
   padding: 0.1rem 0.38rem;
 }
 
-.right-rail {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(300px, 0.8fr) minmax(0, 1.2fr);
-  gap: 0.62rem;
-}
+/* ── Frame sketch panel ───────────────────────────────────── */
 
 .frame-panel {
   background: #f7fafd;
   border: 1px solid #d3dfeb;
   border-radius: 12px;
-  padding: 0.52rem;
+  padding: 0.36rem;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0.34rem;
@@ -327,7 +339,7 @@ body {
 .panel-title-row h2 {
   margin: 0;
   font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-  font-size: 0.98rem;
+  font-size: 0.82rem;
 }
 
 .panel-heading p {
@@ -354,10 +366,8 @@ body {
 
 .frame-canvas-wrap {
   width: 100%;
-  height: auto;
+  height: 100%;
   min-height: 0;
-  aspect-ratio: 1 / 1;
-  max-height: 100%;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #ccd9e8;
@@ -370,16 +380,27 @@ body {
   display: block;
 }
 
+/* ── Pose panel ───────────────────────────────────────────── */
+
 .pose-panel {
   background: linear-gradient(175deg, #ffffff 0%, #f7fbff 100%);
   border: 1px solid #cedbe9;
   border-radius: 14px;
   box-shadow: 0 8px 26px rgba(30, 62, 98, 0.08);
-  padding: 0.56rem;
+  padding: 0.36rem 0.72rem;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 0.42rem;
-  min-height: 0;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 1.4rem;
+  row-gap: 0;
+  align-items: start;
+}
+
+/* Header spans all columns */
+.pose-panel-head {
+  grid-column: 1 / -1;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid #e8f0f8;
+  margin-bottom: 0.2rem;
 }
 
 .pose-panel-head {
@@ -395,91 +416,66 @@ body {
   font-size: 0.95rem;
 }
 
-.axis-range {
-  width: 100%;
-  margin: 0;
-}
-
-.axis-range.translation {
-  accent-color: #1f6fd0;
-}
-
-.axis-range.rotation {
-  accent-color: #2f9a5f;
-}
-
-.pose-sections {
-  min-height: 0;
-  display: grid;
-  gap: 0.42rem;
-  overflow: auto;
-  padding-right: 0.02rem;
-}
+/* Group: Translation / Rotation */
 
 .axis-group {
-  border: 1px solid #d4dfec;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 0.34rem;
-  display: grid;
-  gap: 0.28rem;
-  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.06rem;
 }
 
 .axis-group-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.4rem;
+  margin-bottom: 0.1rem;
 }
 
 .axis-group-head h3 {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4a6480;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-.axis-card-grid {
+/* Single pose row: [label] [slider] [-] [value] [+] [0] */
+
+.pose-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.3rem;
+  grid-template-columns: 48px 1fr 26px 52px 26px 26px;
+  align-items: center;
+  gap: 0.22rem;
+  padding: 0.1rem 0.28rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: background 80ms;
 }
 
-.pose-axis-card {
-  border: 1px solid #d7e1ec;
-  border-radius: 9px;
-  padding: 0.3rem;
-  display: grid;
-  grid-template-rows: auto auto auto auto;
-  gap: 0.24rem;
-  min-width: 0;
+.pose-row:hover {
+  background: #f0f6ff;
+  border-color: #dce8f5;
 }
 
-.pose-axis-card.translation {
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+.pose-row.rotation:hover {
+  background: #f2faf5;
+  border-color: #d3ecdf;
 }
 
-.pose-axis-card.rotation {
-  background: linear-gradient(180deg, #f8fdf9 0%, #ffffff 100%);
-}
-
-.pose-axis-card-head {
+.pose-row-label {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.2rem;
-}
-
-.pose-axis-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.16rem;
+  align-items: baseline;
+  gap: 0.22rem;
   min-width: 0;
 }
 
 .pose-axis-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .pose-axis-dot.translation {
@@ -493,87 +489,93 @@ body {
 }
 
 .pose-axis-label {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 760;
-  color: #20384f;
+  color: #1a3148;
 }
 
 .pose-axis-unit {
   font-size: 0.53rem;
   text-transform: uppercase;
-  color: #5f7893;
+  color: #7a92ab;
   letter-spacing: 0.04em;
+  display: none; /* hidden in row — shown in group header */
 }
 
-.pose-axis-value-wrap {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.18rem;
+.axis-range {
+  width: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.axis-range.translation {
+  accent-color: #1f6fd0;
+}
+
+.axis-range.rotation {
+  accent-color: #2f9a5f;
+}
+
+.axis-step-btn,
+.axis-zero-btn {
+  border: 1px solid #c8d5e5;
+  background: #f7fbff;
+  color: #2f4f6b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: background 100ms;
+}
+
+.axis-step-btn:hover,
+.axis-zero-btn:hover {
+  background: #e4f0fc;
+}
+
+.axis-zero-btn {
+  color: #5f7893;
 }
 
 .pose-axis-value {
   border: 1px solid #c8d6e5;
-  border-radius: 7px;
-  padding: 0.18rem 0.16rem;
+  border-radius: 6px;
+  padding: 0.2rem 0.12rem;
   background: #fbfdff;
-  color: #203449;
+  color: #1a3148;
   font-weight: 640;
-  font-size: 0.67rem;
+  font-size: 0.75rem;
   text-align: center;
   width: 100%;
+  min-width: 0;
 }
 
-.pose-axis-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.16rem;
-  justify-content: center;
-}
-
-.axis-mini-btn,
-.axis-zero-btn,
-.axis-step-btn {
-  border: 1px solid #c8d5e5;
-  background: #f7fbff;
-  color: #2f4f6b;
-  font-size: 0.59rem;
-  font-weight: 730;
-  padding: 0.16rem 0.32rem;
-  min-width: 28px;
-  border-radius: 7px;
-}
-
-.axis-mini-btn.subtle {
-  color: #58718d;
-}
-
-.axis-step-btn {
-  min-width: 34px;
-}
-
-.axis-range.card {
-  width: 100%;
-  margin: 0;
+.pose-axis-value:focus {
+  outline: 2px solid #1f6fd0;
+  outline-offset: 1px;
 }
 
 .pose-convention {
+  grid-column: 1 / -1;
   margin: 0;
-  font-size: 0.64rem;
-  color: #607992;
+  font-size: 0.63rem;
+  color: #7a92ab;
+  padding-top: 0.3rem;
+  border-top: 1px solid #e8f0f8;
 }
+
+/* ── Animations ───────────────────────────────────────────── */
 
 @keyframes shimmer {
-  from {
-    background-position: 130% 0;
-  }
-
-  to {
-    background-position: -90% 0;
-  }
+  from { background-position: 130% 0; }
+  to   { background-position: -90% 0; }
 }
 
-@media (max-width: 1280px) {
+/* ── Responsive ───────────────────────────────────────────── */
+
+@media (max-width: 900px) {
   .topbar-card {
     grid-template-columns: 1fr auto;
     grid-template-areas:
@@ -582,80 +584,22 @@ body {
     align-items: start;
   }
 
-  .topbar-head {
-    grid-area: head;
-  }
+  .topbar-head    { grid-area: head; }
+  .topbar-status  { grid-area: status; }
+  .topbar-actions { grid-area: actions; align-self: center; }
 
-  .topbar-status {
-    grid-area: status;
-  }
-
-  .topbar-actions {
-    grid-area: actions;
-    align-self: center;
-  }
-
+  /* Stack: DRR full-width, frame hidden or below, pose full-width */
   .workspace-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(360px, 55vh) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
   }
 
-  .right-rail {
-    grid-template-columns: minmax(310px, 0.96fr) minmax(340px, 1.04fr);
-    grid-template-rows: none;
-    align-items: stretch;
+  .pose-panel {
+    grid-template-columns: 1fr;  /* stack groups vertically on small screens */
   }
 
-  .results-note {
-    max-width: 16rem;
-  }
-}
-
-@media (max-width: 980px) {
-  .app-shell {
-    min-height: unset;
-  }
-
-  .topbar-card {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "head"
-      "status"
-      "actions";
-  }
-
-  .topbar-actions {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .workspace-layout {
-    grid-template-rows: minmax(340px, 50vh) minmax(0, 1fr);
-  }
-
-  .results-head {
-    flex-direction: column;
-    align-items: start;
-  }
-
-  .results-note {
-    text-align: left;
-    max-width: none;
-  }
-
-  .right-rail {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(320px, 46vh) minmax(0, 1fr);
-  }
-
-  .axis-card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .pose-sections {
-    overflow: visible;
-  }
+  .results-note { max-width: none; }
+  .results-head { flex-direction: column; align-items: start; }
 }
 
 @media (max-width: 760px) {
@@ -664,22 +608,15 @@ body {
     gap: 0.62rem;
   }
 
-  .results-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: none;
-  }
-
-  .drr-tile {
-    min-height: 220px;
-  }
+  .drr-tile { min-height: 220px; }
 
   .frame-canvas-wrap {
     max-width: 520px;
     justify-self: center;
   }
 
-  .axis-card-grid {
-    grid-template-columns: 1fr;
-    gap: 0.34rem;
+  .pose-row {
+    grid-template-columns: 44px 1fr 24px 48px 24px 24px;
+    gap: 0.2rem;
   }
 }

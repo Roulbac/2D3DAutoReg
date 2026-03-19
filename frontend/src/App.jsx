@@ -29,13 +29,13 @@ const AXIS_COLORS = {
   z: '#2f7de1',
 }
 
-const PLACEHOLDER_VIEWS = [{ view: 1 }, { view: 2 }, { view: 3 }, { view: 4 }]
+const PLACEHOLDER_VIEWS = [{ view: 'Main View' }]
 
 const MM_TO_SCENE = 0.115
 const FRAME_CAMERA_DEFAULT = {
-  position: [7.2, 2.4, 7.1],
-  target: [0, -0.1, -0.2],
-  fov: 34,
+  position: [22, 5, -6.9],
+  target: [0, 0.46, -6.9],
+  fov: 46,
 }
 
 const toRad = (deg) => (deg * Math.PI) / 180
@@ -154,6 +154,20 @@ function PatientModel({ origin }) {
       <mesh position={[0, 1.95, 0]}>
         <sphereGeometry args={[0.46, 24, 24]} />
         <meshStandardMaterial color="#1f49e0" metalness={0.08} roughness={0.3} />
+      </mesh>
+
+      {/* Face features on +Z side to distinguish front from back */}
+      <mesh position={[-0.16, 2.08, 0.40]}>
+        <sphereGeometry args={[0.08, 12, 12]} />
+        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.6} />
+      </mesh>
+      <mesh position={[0.16, 2.08, 0.40]}>
+        <sphereGeometry args={[0.08, 12, 12]} />
+        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.6} />
+      </mesh>
+      <mesh position={[0, 1.82, 0.40]}>
+        <boxGeometry args={[0.22, 0.055, 0.05]} />
+        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.6} />
       </mesh>
 
       <mesh position={[0, 0.78, 0]}>
@@ -410,8 +424,7 @@ function FrameIllustration({ pose }) {
 }
 
 function PoseAxisCard({ param, value, onChange }) {
-  const quickStep = param.group === 'translation' ? 5 : 2
-  const coarseStep = param.group === 'translation' ? 20 : 10
+  const step = param.group === 'translation' ? 5 : 2
 
   const handleNumber = (event) => {
     const next = Number(event.target.value)
@@ -424,79 +437,46 @@ function PoseAxisCard({ param, value, onChange }) {
   }
 
   return (
-    <article className={`pose-axis-card ${param.group}`}>
-      <header className="pose-axis-card-head">
-        <div className="pose-axis-meta">
-          <span className={`pose-axis-dot ${param.group}`} />
-          <span className="pose-axis-label">{param.label}</span>
-        </div>
-        <span className="pose-axis-unit">{param.unit}</span>
-      </header>
-
-      <div className="pose-axis-value-wrap">
-        <button
-          type="button"
-          className="axis-step-btn"
-          onClick={() => applyDelta(-quickStep)}
-          aria-label={`Decrease ${param.label} by ${quickStep}`}
-        >
-          -{quickStep}
-        </button>
-
-        <input
-          className="pose-axis-value"
-          type="number"
-          min={param.min}
-          max={param.max}
-          step={param.step}
-          value={value}
-          onChange={handleNumber}
-          aria-label={`${param.label} value`}
-        />
-
-        <button
-          type="button"
-          className="axis-step-btn"
-          onClick={() => applyDelta(quickStep)}
-          aria-label={`Increase ${param.label} by ${quickStep}`}
-        >
-          +{quickStep}
-        </button>
-      </div>
-
-      <div className="pose-axis-actions">
-        <button
-          type="button"
-          className="axis-mini-btn subtle"
-          onClick={() => applyDelta(-coarseStep)}
-          aria-label={`Decrease ${param.label} by ${coarseStep}`}
-        >
-          -{coarseStep}
-        </button>
-        <button type="button" className="axis-zero-btn" onClick={() => onChange(param.key, 0)} aria-label={`Zero ${param.label}`}>
-          0
-        </button>
-        <button
-          type="button"
-          className="axis-mini-btn"
-          onClick={() => applyDelta(coarseStep)}
-          aria-label={`Increase ${param.label} by ${coarseStep}`}
-        >
-          +{coarseStep}
-        </button>
+    <div className={`pose-row ${param.group}`}>
+      <div className="pose-row-label">
+        <span className={`pose-axis-dot ${param.group}`} />
+        <span className="pose-axis-label">{param.label}</span>
       </div>
 
       <input
-        className={`axis-range card ${param.group}`}
+        className={`axis-range ${param.group}`}
         type="range"
         min={param.min}
         max={param.max}
         step={param.step}
         value={value}
-        onChange={(event) => onChange(param.key, Number(event.target.value))}
+        onChange={(e) => onChange(param.key, Number(e.target.value))}
         aria-label={`${param.label} slider`}
       />
-    </article>
+
+      <button type="button" className="axis-step-btn" onClick={() => applyDelta(-step)} aria-label={`-${step}`}>
+        −
+      </button>
+
+      <input
+        className="pose-axis-value"
+        type="number"
+        min={param.min}
+        max={param.max}
+        step={param.step}
+        value={value}
+        onChange={handleNumber}
+        aria-label={`${param.label} value`}
+      />
+
+      <button type="button" className="axis-step-btn" onClick={() => applyDelta(step)} aria-label={`+${step}`}>
+        +
+      </button>
+
+      <button type="button" className="axis-zero-btn" onClick={() => onChange(param.key, 0)} aria-label={`Zero ${param.label}`}>
+        0
+      </button>
+    </div>
   )
 }
 
@@ -521,35 +501,25 @@ function PoseControlsPanel({
         </button>
       </header>
 
-      <div className="pose-sections">
-        <section className="axis-group">
-          <header className="axis-group-head">
-            <h3>Translation (mm)</h3>
-            <button type="button" className="ghost-btn tiny" onClick={() => onResetGroup('translation')}>
-              Zero T
-            </button>
-          </header>
-          <div className="axis-card-grid">
-            {translationControls.map((param) => (
-              <PoseAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
-            ))}
-          </div>
-        </section>
+      <section className="axis-group">
+        <header className="axis-group-head">
+          <h3>Translation (mm)</h3>
+          <button type="button" className="ghost-btn tiny" onClick={() => onResetGroup('translation')}>Zero T</button>
+        </header>
+        {translationControls.map((param) => (
+          <PoseAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
+        ))}
+      </section>
 
-        <section className="axis-group">
-          <header className="axis-group-head">
-            <h3>Rotation (deg)</h3>
-            <button type="button" className="ghost-btn tiny" onClick={() => onResetGroup('rotation')}>
-              Zero R
-            </button>
-          </header>
-          <div className="axis-card-grid">
-            {rotationControls.map((param) => (
-              <PoseAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
-            ))}
-          </div>
-        </section>
-      </div>
+      <section className="axis-group">
+        <header className="axis-group-head">
+          <h3>Rotation (deg)</h3>
+          <button type="button" className="ghost-btn tiny" onClick={() => onResetGroup('rotation')}>Zero R</button>
+        </header>
+        {rotationControls.map((param) => (
+          <PoseAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
+        ))}
+      </section>
 
       <p className="pose-convention">R = Rz * Ry * Rx, p_out = R*p_in + t.</p>
     </section>
@@ -637,16 +607,16 @@ export default function App() {
         </div>
       </header>
 
-      {error ? <p className="error-text">{error}</p> : null}
-
-      <section className="workspace-layout">
+      <div className="workspace-wrap">
+        {error ? <p className="error-text">{error}</p> : null}
+        <section className="workspace-layout">
         <section className="results-panel">
           <header className="results-head">
             <div>
               <p className="eyebrow">Output</p>
               <h2>DRR Views</h2>
             </div>
-            <p className="results-note">AP camera returns 4 projections from the backend stub.</p>
+            <p className="results-note">Backend stub projection.</p>
           </header>
 
           <section className="results-grid">
@@ -654,7 +624,7 @@ export default function App() {
               <figure key={drr.view} className="drr-tile">
                 <div className="drr-viewport">
                   {drr.image ? (
-                    <img src={drr.image} alt={`DRR view ${drr.view}`} />
+                    <img src={drr.image} alt={drr.view} />
                   ) : (
                     <div className={`drr-empty ${isLoading ? 'loading' : ''}`}>
                       {isLoading ? 'Rendering projection...' : 'Generate to load image'}
@@ -663,7 +633,7 @@ export default function App() {
                   {isLoading && drr.image ? <div className="tile-overlay">Updating...</div> : null}
                 </div>
                 <figcaption>
-                  <span>View {drr.view}</span>
+                  <span>{drr.view}</span>
                   <span className="view-tag">{drr.image ? 'Ready' : 'Pending'}</span>
                 </figcaption>
               </figure>
@@ -671,16 +641,15 @@ export default function App() {
           </section>
         </section>
 
-        <aside className="right-rail">
-          <FrameIllustration pose={pose} />
-          <PoseControlsPanel
-            pose={pose}
-            onChangePose={updatePose}
-            onResetGroup={resetGroup}
-            onResetPose={resetPose}
-          />
-        </aside>
+        <FrameIllustration pose={pose} />
+        <PoseControlsPanel
+          pose={pose}
+          onChangePose={updatePose}
+          onResetGroup={resetGroup}
+          onResetPose={resetPose}
+        />
       </section>
+      </div>
     </main>
   )
 }
