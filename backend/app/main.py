@@ -129,7 +129,13 @@ async def websocket_endpoint(ws: WebSocket):
             msg_type = data.get("type")
 
             if msg_type == "registration_start":
-                await _handle_registration_start(ws, session, data)
+                try:
+                    await _handle_registration_start(ws, session, data)
+                except WebSocketDisconnect:
+                    raise  # let the outer handler deal with real disconnects
+                except Exception as exc:
+                    logger.exception("Session %s: registration handler error", session_id)
+                    await ws.send_json({"type": "error", "message": str(exc)})
             elif msg_type == "registration_cancel":
                 if session.runner and session.runner.is_running:
                     session.runner.cancel()
