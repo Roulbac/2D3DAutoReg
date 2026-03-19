@@ -177,6 +177,7 @@ class DRREngine:
             dtype=torch.float32, device=self.device,
         )
         self.K_inv = torch.inverse(self.K)
+        self._build_dirs_cam_cache()
 
         # --- Camera presets ---------------------------------------------------
         # Each preset: (default_source, default_R_w2c)
@@ -226,6 +227,24 @@ class DRREngine:
         # Backwards-compat aliases
         self.default_source = source_ap
         self.default_R = R_ap
+
+    def _build_dirs_cam_cache(self) -> None:
+        """Precompute camera-space ray directions from K_inv and pixel grid.
+
+        These depend only on intrinsics and image_size, not on pose, so they
+        can be computed once and reused across every render call.
+        """
+        H = W = self.image_size
+        v, u = torch.meshgrid(
+            torch.arange(H, dtype=torch.float32, device=self.device),
+            torch.arange(W, dtype=torch.float32, device=self.device),
+            indexing="ij",
+        )
+        ones = torch.ones_like(u)
+        pixels = torch.stack([u, v, ones], dim=-1).reshape(-1, 3)  # (H*W, 3)
+        dirs_cam = (self.K_inv @ pixels.T).T  # (H*W, 3)
+        dirs_cam[:, 2] = -dirs_cam[:, 2]  # camera convention: scene in -Z
+        self._dirs_cam = dirs_cam
 
     # ------------------------------------------------------------------
     # 3. Pose composition
@@ -324,32 +343,19 @@ class DRREngine:
     def _generate_rays(self, source_world: torch.Tensor, R_w2c: torch.Tensor):
         """Unproject pixel grid to world-space ray directions.
 
+        Uses the cached camera-space directions (_dirs_cam) so that only the
+        rotation to world space is computed each call.
+
         Returns
         -------
         origins : (H*W, 3)   all equal to source_world
         dirs    : (H*W, 3)   unit direction vectors in world space
         """
         H = W = self.image_size
-        # Pixel coordinates grid
-        v, u = torch.meshgrid(
-            torch.arange(H, dtype=torch.float32, device=self.device),
-            torch.arange(W, dtype=torch.float32, device=self.device),
-            indexing="ij",
-        )
-        ones = torch.ones_like(u)
-        pixels = torch.stack([u, v, ones], dim=-1).reshape(-1, 3)  # (H*W, 3)
 
-        # Camera-space directions via K_inv
-        dirs_cam = (self.K_inv @ pixels.T).T  # (H*W, 3)
-
-        # Camera convention: scene in -Z → negate Z component
-        dirs_cam[:, 2] = -dirs_cam[:, 2]
-
-        # Rotate to world space: R_w2c maps world→cam, so cam→world = R_w2c^T
+        # Rotate cached camera-space dirs to world space
         R_c2w = R_w2c.T
-        dirs_world = (R_c2w @ dirs_cam.T).T  # (H*W, 3)
-
-        # Normalise
+        dirs_world = (R_c2w @ self._dirs_cam.T).T  # (H*W, 3)
         dirs_world = F.normalize(dirs_world, dim=-1)
 
         origins = source_world.unsqueeze(0).expand(H * W, -1)
@@ -512,6 +518,7 @@ class DRREngine:
             dtype=torch.float32, device=self.device,
         )
         self.K_inv = torch.inverse(self.K)
+        self._build_dirs_cam_cache()
         logger.info("Intrinsics updated: fx=%.2f, fy=%.2f, cx=%.2f, cy=%.2f", fx, fy, cx, cy)
 
     def reset_intrinsics(self) -> None:
@@ -646,6 +653,13 @@ class DRREngine:
     ) -> torch.Tensor:
         """Differentiable DRR rendering for gradient-based optimization.
 
+        Only the 6 pose parameters carry gradients.  To save memory we:
+        - reuse the cached camera-space ray directions (_dirs_cam)
+        - detach AABB intersection results (t_near / t_far / valid) so the
+          backward graph covers only the ray→sample→volume path, not the
+          slab-intersection arithmetic.  Pose gradients still flow through
+          ray origins and directions into the sample positions.
+
         Parameters
         ----------
         pose : (6,) tensor with requires_grad — [tx, ty, tz, rx, ry, rz]
@@ -656,7 +670,16 @@ class DRREngine:
         """
         source, R_w2c = self._apply_pose_diff(pose, preset)
         origins, dirs = self._generate_rays(source, R_w2c)
+
+        # Detach AABB outputs — these determine *which* ray segment to
+        # sample but don't contribute meaningful pose gradients.  The
+        # dominant gradient path is through the sample positions computed
+        # from (origins, dirs) inside _sample_and_accumulate.
         t_near, t_far, valid = self._aabb_intersect(origins, dirs)
+        t_near = t_near.detach()
+        t_far = t_far.detach()
+        valid = valid.detach()
+
         intensities = self._sample_and_accumulate(
             origins, dirs, t_near, t_far, valid, threshold=threshold,
         )
