@@ -1,58 +1,43 @@
 import * as React from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { Line, OrbitControls, Text } from '@react-three/drei'
 import * as THREE from 'three'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
-const PARAM_CONFIG = [
-  { key: 'tx', label: 'Tx', min: -200, max: 200, step: 1, unit: 'mm', group: 'translation' },
-  { key: 'ty', label: 'Ty', min: -200, max: 200, step: 1, unit: 'mm', group: 'translation' },
-  { key: 'tz', label: 'Tz', min: -200, max: 200, step: 1, unit: 'mm', group: 'translation' },
+const TRANSLATION_PARAMS = [
+  { key: 'tx', label: 'Tx', step: 1, unit: 'mm', group: 'translation' },
+  { key: 'ty', label: 'Ty', step: 1, unit: 'mm', group: 'translation' },
+  { key: 'tz', label: 'Tz', step: 1, unit: 'mm', group: 'translation' },
+]
+
+const ROTATION_PARAMS = [
   { key: 'rx', label: 'Rx', min: -180, max: 180, step: 1, unit: 'deg', group: 'rotation' },
   { key: 'ry', label: 'Ry', min: -180, max: 180, step: 1, unit: 'deg', group: 'rotation' },
   { key: 'rz', label: 'Rz', min: -180, max: 180, step: 1, unit: 'deg', group: 'rotation' },
 ]
 
-const INITIAL_POSE = {
-  tx: 0,
-  ty: 0,
-  tz: 0,
-  rx: 0,
-  ry: 0,
-  rz: 0,
-}
+const PARAM_CONFIG = [...TRANSLATION_PARAMS, ...ROTATION_PARAMS]
 
-const AXIS_COLORS = {
-  x: '#ff5a4f',
-  y: '#4caf50',
-  z: '#2f7de1',
-}
+const INITIAL_POSE = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 }
 
-const PLACEHOLDER_VIEWS = [{ view: 'Main View' }]
+const AXIS_COLORS = { x: '#ff5a4f', y: '#4caf50', z: '#2f7de1' }
 
-const MM_TO_SCENE = 0.115
-const FRAME_CAMERA_DEFAULT = {
-  position: [10, 6, 12],
-  target: [0, 0, -2],
-  fov: 48,
-}
+const PLACEHOLDER_VIEWS = [{ view: 'AP' }]
 
+const FRAME_CAMERA_DEFAULT = { position: [10, 6, 12], target: [0, 0, -2], fov: 48 }
+
+// ---------------------------------------------------------------------------
+// Math helpers — mirrors backend's _euler_to_rotation / _apply_pose exactly
+// ---------------------------------------------------------------------------
 const toRad = (deg) => (deg * Math.PI) / 180
 
-function rotationFromEuler({ rx, ry, rz }) {
-  const ax = toRad(rx)
-  const ay = toRad(ry)
-  const az = toRad(rz)
-
-  const sx = Math.sin(ax)
-  const cx = Math.cos(ax)
-  const sy = Math.sin(ay)
-  const cy = Math.cos(ay)
-  const sz = Math.sin(az)
-  const cz = Math.cos(az)
-
-  // Project convention: R = Rz * Ry * Rx
+function eulerToRotation(rx, ry, rz) {
+  const ax = toRad(rx), ay = toRad(ry), az = toRad(rz)
+  const sx = Math.sin(ax), cx = Math.cos(ax)
+  const sy = Math.sin(ay), cy = Math.cos(ay)
+  const sz = Math.sin(az), cz = Math.cos(az)
+  // R = Rz * Ry * Rx — same as backend
   return [
     [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
     [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
@@ -60,29 +45,88 @@ function rotationFromEuler({ rx, ry, rz }) {
   ]
 }
 
+const mat3MulVec = (m, v) => [
+  m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+  m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+  m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
+]
+
 const transpose3 = (m) => [
   [m[0][0], m[1][0], m[2][0]],
   [m[0][1], m[1][1], m[2][1]],
   [m[0][2], m[1][2], m[2][2]],
 ]
 
-const mulMatVec = (m, v) => ({
-  x: m[0][0] * v.x + m[0][1] * v.y + m[0][2] * v.z,
-  y: m[1][0] * v.x + m[1][1] * v.y + m[1][2] * v.z,
-  z: m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z,
-})
+const mat3Mul = (a, b) => [
+  [a[0][0]*b[0][0]+a[0][1]*b[1][0]+a[0][2]*b[2][0], a[0][0]*b[0][1]+a[0][1]*b[1][1]+a[0][2]*b[2][1], a[0][0]*b[0][2]+a[0][1]*b[1][2]+a[0][2]*b[2][2]],
+  [a[1][0]*b[0][0]+a[1][1]*b[1][0]+a[1][2]*b[2][0], a[1][0]*b[0][1]+a[1][1]*b[1][1]+a[1][2]*b[2][1], a[1][0]*b[0][2]+a[1][1]*b[1][2]+a[1][2]*b[2][2]],
+  [a[2][0]*b[0][0]+a[2][1]*b[1][0]+a[2][2]*b[2][0], a[2][0]*b[0][1]+a[2][1]*b[1][1]+a[2][2]*b[2][1], a[2][0]*b[0][2]+a[2][1]*b[1][2]+a[2][2]*b[2][2]],
+]
 
-const subVec = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
+const vecSub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+const vecAdd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+/**
+ * Replicate backend's camera-relative _apply_pose.
+ * Perturbations are in the camera's own coordinate frame.
+ * sceneInfo.camera.basis.{x,y,z} are columns of R_c2w_default (= default_R^T).
+ */
+function applyPose(sceneInfo, pose) {
+  const { camera, volume } = sceneInfo
+  const centroid = volume.centroid
+  const defaultSource = camera.source
 
-const toScenePoint = (v) => [v.x * MM_TO_SCENE, v.z * MM_TO_SCENE, -v.y * MM_TO_SCENE]
-const toSceneVec = (v) => new THREE.Vector3(v.x, v.z, -v.y)
+  // Reconstruct default_R (world-to-camera) from basis (camera-to-world columns)
+  // R_c2w_default columns = camera.basis.{x, y, z}
+  // default_R = R_c2w_default^T → rows of default_R = basis vectors
+  const R_c2w_default = [
+    [camera.basis.x[0], camera.basis.y[0], camera.basis.z[0]],
+    [camera.basis.x[1], camera.basis.y[1], camera.basis.z[1]],
+    [camera.basis.x[2], camera.basis.y[2], camera.basis.z[2]],
+  ]
+  const default_R = transpose3(R_c2w_default)
+
+  // Camera-relative rotation → conjugate to world frame
+  // R_world = R_c2w_default @ R_local @ default_R
+  const R_local = eulerToRotation(pose.rx, pose.ry, pose.rz)
+  const R_world = mat3Mul(R_c2w_default, mat3Mul(R_local, default_R))
+
+  // Orbit source around centroid
+  const sourceRel = vecSub(defaultSource, centroid)
+  const sourceRotated = vecAdd(mat3MulVec(R_world, sourceRel), centroid)
+
+  // Camera-relative translation → convert to world via posed R_c2w
+  // R_w2c = default_R @ R_world^T; R_c2w = R_w2c^T
+  const R_w2c = mat3Mul(default_R, transpose3(R_world))
+  const R_c2w = transpose3(R_w2c)
+  const t_cam = [pose.tx, pose.ty, pose.tz]
+  const t_world = mat3MulVec(R_c2w, t_cam)
+
+  const source = vecAdd(sourceRotated, t_world)
+
+  // Cam-to-world basis columns from R_c2w
+  const basisX = [R_c2w[0][0], R_c2w[1][0], R_c2w[2][0]]
+  const basisY = [R_c2w[0][1], R_c2w[1][1], R_c2w[2][1]]
+  const basisZ = [R_c2w[0][2], R_c2w[1][2], R_c2w[2][2]]
+
+  return { source, basis: { x: basisX, y: basisY, z: basisZ } }
+}
+
+// ---------------------------------------------------------------------------
+// World coords (mm) → Three.js scene coords
+// Backend world: X=right, Y=anterior (into patient), Z=superior (up)
+// Three.js: X=right, Y=up, Z=toward viewer
+// Mapping: scene_x = world_x, scene_y = world_z, scene_z = -world_y
+// ---------------------------------------------------------------------------
+const WORLD_SCALE = 0.005 // mm to scene units (volume ~500mm → ~2.5 scene units)
+
+const worldToScene = (v) => [v[0] * WORLD_SCALE, v[2] * WORLD_SCALE, -v[1] * WORLD_SCALE]
+const worldToSceneVec = (v) => new THREE.Vector3(v[0], v[2], -v[1])
 
 function basisToQuaternion(basis) {
-  const bx = toSceneVec(basis.x).normalize()
-  const by = toSceneVec(basis.y).normalize()
-  const bz = toSceneVec(basis.z).normalize()
+  const bx = worldToSceneVec(basis.x).normalize()
+  const by = worldToSceneVec(basis.y).normalize()
+  const bz = worldToSceneVec(basis.z).normalize()
 
   const matrix = new THREE.Matrix4().set(
     bx.x, by.x, bz.x, 0,
@@ -90,32 +134,29 @@ function basisToQuaternion(basis) {
     bx.z, by.z, bz.z, 0,
     0, 0, 0, 1,
   )
-
   return new THREE.Quaternion().setFromRotationMatrix(matrix)
 }
 
-function AxisTriad({ origin, basis, length = 3.1, dashed = false, opacity = 1 }) {
+// ---------------------------------------------------------------------------
+// 3D Components
+// ---------------------------------------------------------------------------
+function AxisTriad({ origin, basis, length = 3.1, lengths = null, dashed = false, opacity = 1, labels = null }) {
   const axes = React.useMemo(() => {
-    const start = new THREE.Vector3(...toScenePoint(origin))
+    const start = new THREE.Vector3(...worldToScene(origin))
     const up = new THREE.Vector3(0, 1, 0)
 
     return [
-      { key: 'x', color: AXIS_COLORS.x, dir: toSceneVec(basis.x).normalize() },
-      { key: 'y', color: AXIS_COLORS.y, dir: toSceneVec(basis.y).normalize() },
-      { key: 'z', color: AXIS_COLORS.z, dir: toSceneVec(basis.z).normalize() },
+      { key: 'x', color: AXIS_COLORS.x, dir: worldToSceneVec(basis.x).normalize() },
+      { key: 'y', color: AXIS_COLORS.y, dir: worldToSceneVec(basis.y).normalize() },
+      { key: 'z', color: AXIS_COLORS.z, dir: worldToSceneVec(basis.z).normalize() },
     ].map((entry) => {
-      const end = start.clone().addScaledVector(entry.dir, length)
+      const len = lengths?.[entry.key] ?? length
+      const end = start.clone().addScaledVector(entry.dir, len)
       const tipQ = new THREE.Quaternion().setFromUnitVectors(up, entry.dir)
-
-      return {
-        ...entry,
-        start,
-        end,
-        tipPos: end.toArray(),
-        tipQ,
-      }
+      const labelPos = start.clone().addScaledVector(entry.dir, len + 0.7)
+      return { ...entry, start, end, tipPos: end.toArray(), tipQ, labelPos: labelPos.toArray() }
     })
-  }, [origin, basis, length])
+  }, [origin, basis, length, lengths])
 
   return (
     <group>
@@ -135,10 +176,23 @@ function AxisTriad({ origin, basis, length = 3.1, dashed = false, opacity = 1 })
             <coneGeometry args={[0.15, 0.42, 14]} />
             <meshStandardMaterial color={axis.color} transparent opacity={opacity} />
           </mesh>
+          {labels?.[axis.key] && (
+            <Text
+              position={axis.labelPos}
+              fontSize={1.1}
+              color={axis.color}
+              anchorX="center"
+              anchorY="middle"
+              outlineColor="#ffffff"
+              outlineWidth={0.12}
+              fontWeight="bold"
+            >
+              {labels[axis.key]}
+            </Text>
+          )}
         </group>
       ))}
-
-      <mesh position={toScenePoint(origin)}>
+      <mesh position={worldToScene(origin)}>
         <sphereGeometry args={[0.13, 20, 20]} />
         <meshStandardMaterial color="#d88b00" />
       </mesh>
@@ -146,73 +200,17 @@ function AxisTriad({ origin, basis, length = 3.1, dashed = false, opacity = 1 })
   )
 }
 
-function PatientModel({ origin }) {
-  const position = React.useMemo(() => toScenePoint(origin), [origin])
 
-  return (
-    <group position={position}>
-      <mesh position={[0, 1.95, 0]}>
-        <sphereGeometry args={[0.46, 24, 24]} />
-        <meshStandardMaterial color="#1f49e0" metalness={0.08} roughness={0.3} />
-      </mesh>
-
-      {/* Face features on +Z side to distinguish front from back */}
-      <mesh position={[-0.16, 2.08, 0.40]}>
-        <sphereGeometry args={[0.08, 12, 12]} />
-        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.6} />
-      </mesh>
-      <mesh position={[0.16, 2.08, 0.40]}>
-        <sphereGeometry args={[0.08, 12, 12]} />
-        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.6} />
-      </mesh>
-      <mesh position={[0, 1.82, 0.40]}>
-        <boxGeometry args={[0.22, 0.055, 0.05]} />
-        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.6} />
-      </mesh>
-
-      <mesh position={[0, 0.78, 0]}>
-        <cylinderGeometry args={[0.52, 0.64, 2.15, 22]} />
-        <meshStandardMaterial color="#1944de" metalness={0.06} roughness={0.35} />
-      </mesh>
-
-      <mesh position={[-0.8, 1.02, 0]} rotation={[0, 0, Math.PI / 2.6]}>
-        <cylinderGeometry args={[0.11, 0.11, 1.15, 16]} />
-        <meshStandardMaterial color="#0d2ea6" />
-      </mesh>
-      <mesh position={[0.8, 1.02, 0]} rotation={[0, 0, -Math.PI / 2.6]}>
-        <cylinderGeometry args={[0.11, 0.11, 1.15, 16]} />
-        <meshStandardMaterial color="#0d2ea6" />
-      </mesh>
-
-      <mesh position={[-0.28, -0.6, 0]} rotation={[0, 0, 0.14]}>
-        <cylinderGeometry args={[0.12, 0.12, 1.62, 16]} />
-        <meshStandardMaterial color="#0d2ea6" />
-      </mesh>
-      <mesh position={[0.28, -0.6, 0]} rotation={[0, 0, -0.14]}>
-        <cylinderGeometry args={[0.12, 0.12, 1.62, 16]} />
-        <meshStandardMaterial color="#0d2ea6" />
-      </mesh>
-    </group>
-  )
-}
-
-function CTVolume({ origin, cubeHalfMm }) {
-  const pos = React.useMemo(() => toScenePoint(origin), [origin])
-  const cubeHalf = cubeHalfMm * MM_TO_SCENE
-  const side = cubeHalf * 2
+function CTVolume({ origin, halfExtent }) {
+  const pos = React.useMemo(() => worldToScene(origin), [origin])
+  // halfExtent is [hx, hy, hz] in scene units
+  const hx = halfExtent[0], hy = halfExtent[1], hz = halfExtent[2]
 
   const { corners, edges } = React.useMemo(() => {
     const c = [
-      [-cubeHalf, -cubeHalf, -cubeHalf],
-      [cubeHalf, -cubeHalf, -cubeHalf],
-      [cubeHalf, cubeHalf, -cubeHalf],
-      [-cubeHalf, cubeHalf, -cubeHalf],
-      [-cubeHalf, -cubeHalf, cubeHalf],
-      [cubeHalf, -cubeHalf, cubeHalf],
-      [cubeHalf, cubeHalf, cubeHalf],
-      [-cubeHalf, cubeHalf, cubeHalf],
+      [-hx, -hy, -hz], [hx, -hy, -hz], [hx, hy, -hz], [-hx, hy, -hz],
+      [-hx, -hy, hz], [hx, -hy, hz], [hx, hy, hz], [-hx, hy, hz],
     ]
-
     return {
       corners: c,
       edges: [
@@ -221,15 +219,14 @@ function CTVolume({ origin, cubeHalfMm }) {
         [0, 4], [1, 5], [2, 6], [3, 7],
       ],
     }
-  }, [cubeHalf])
+  }, [hx, hy, hz])
 
   return (
     <group position={pos}>
       <mesh>
-        <boxGeometry args={[side, side, side]} />
+        <boxGeometry args={[hx * 2, hy * 2, hz * 2]} />
         <meshStandardMaterial color="#e56700" transparent opacity={0.08} depthWrite={false} />
       </mesh>
-
       {edges.map(([a, b], idx) => (
         <Line
           key={`ct-edge-${idx}`}
@@ -243,9 +240,8 @@ function CTVolume({ origin, cubeHalfMm }) {
           opacity={0.82}
         />
       ))}
-
       <Text
-        position={[cubeHalf + 0.62, -cubeHalf * 0.48, cubeHalf * 0.74]}
+        position={[hx + 0.62, -hy * 0.48, hz * 0.74]}
         fontSize={0.32}
         color="#a24800"
         anchorX="center"
@@ -260,20 +256,14 @@ function CTVolume({ origin, cubeHalfMm }) {
 }
 
 function APCameraModel({ origin, basis }) {
-  const position = React.useMemo(() => toScenePoint(origin), [origin])
+  const position = React.useMemo(() => worldToScene(origin), [origin])
   const quaternion = React.useMemo(() => basisToQuaternion(basis), [basis])
 
   const frustum = React.useMemo(() => {
-    const near = 1.8
+    const near = -1.8
     const hw = 0.82
     const hh = 0.56
-
-    return [
-      [-hw, -hh, near],
-      [hw, -hh, near],
-      [hw, hh, near],
-      [-hw, hh, near],
-    ]
+    return [[-hw, -hh, near], [hw, -hh, near], [hw, hh, near], [-hw, hh, near]]
   }, [])
 
   return (
@@ -282,81 +272,93 @@ function APCameraModel({ origin, basis }) {
         <boxGeometry args={[0.92, 0.58, 0.62]} />
         <meshStandardMaterial color="#2f80df" metalness={0.1} roughness={0.35} />
       </mesh>
-
-      <mesh position={[0, 0, 0.45]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0, -0.45]} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[0.18, 0.18, 0.24, 20]} />
         <meshStandardMaterial color="#f5f9ff" metalness={0.04} roughness={0.28} />
       </mesh>
-
       <mesh position={[0, 0.28, 0.04]}>
         <boxGeometry args={[0.32, 0.09, 0.22]} />
         <meshStandardMaterial color="#1b58a0" />
       </mesh>
-
-      <mesh position={[0, 0, 1.8]}>
+      <mesh position={[0, 0, -1.8]}>
         <planeGeometry args={[1.64, 1.12]} />
         <meshStandardMaterial color="#4f9cf1" transparent opacity={0.2} side={THREE.DoubleSide} />
       </mesh>
-
       <Line points={[frustum[0], frustum[1], frustum[2], frustum[3], frustum[0]]} color="#4d93e2" lineWidth={1.2} />
       {frustum.map((corner, idx) => (
-        <Line key={`frustum-ray-${idx}`} points={[[0, 0, 0.12], corner]} color="#4d93e2" lineWidth={1.1} />
+        <Line key={`frustum-ray-${idx}`} points={[[0, 0, -0.12], corner]} color="#4d93e2" lineWidth={1.1} />
       ))}
     </group>
   )
 }
 
-function FrameScene({ pose }) {
-  const sceneState = React.useMemo(() => {
-    const translationScale = 0.22
-    const poseTranslation = {
-      x: clamp(pose.tx * translationScale, -75, 75),
-      y: clamp(pose.ty * translationScale, -75, 75),
-      z: clamp(pose.tz * translationScale, -75, 75),
+// ---------------------------------------------------------------------------
+// Auto-fit: adjust orbit controls to encompass camera + CT volume
+// resetKey change → pick a fresh isometric angle; pose-only change → keep user orbit direction
+// ---------------------------------------------------------------------------
+function AutoFitControls({ controlsRef, cameraScenePos, volumeScenePos, resetKey }) {
+  const { camera } = useThree()
+  const lastResetKey = React.useRef(-1)
+
+  React.useEffect(() => {
+    const controls = controlsRef.current
+    if (!controls) return
+
+    const camPos = new THREE.Vector3(...cameraScenePos)
+    const volPos = new THREE.Vector3(...volumeScenePos)
+
+    const center = new THREE.Vector3().addVectors(camPos, volPos).multiplyScalar(0.5)
+    const radius = camPos.distanceTo(volPos) / 2 + 1.5
+
+    const fov = camera.fov * (Math.PI / 180)
+    const dist = radius / Math.sin(fov / 2) * 1.15
+
+    // Fresh angle on first mount (lastResetKey starts at -1) or explicit reset
+    const forceAngle = resetKey !== lastResetKey.current
+    lastResetKey.current = resetKey
+
+    if (forceAngle) {
+      const dir = new THREE.Vector3(0.6, 0.4, 0.7).normalize()
+      camera.position.copy(center.clone().addScaledVector(dir, dist))
+    } else {
+      const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize()
+      camera.position.copy(center.clone().addScaledVector(dir, dist))
     }
 
-    const rotation = rotationFromEuler(pose)
-    const invRotation = transpose3(rotation)
+    controls.target.copy(center)
+    controls.update()
+  }, [cameraScenePos, volumeScenePos, resetKey, camera, controlsRef])
 
-    const volumeOrigin = { x: 0, y: 0, z: -8 }
-    const patientOrigin = { x: 0, y: 0, z: -8 }
+  return null
+}
 
-    // Hard-coded AP camera extrinsic (camera->world).
-    const apCameraExtrinsic = {
-      translation: { x: 0, y: 120, z: 16 },
-      basis: {
-        x: { x: 1, y: 0, z: 0 },
-        y: { x: 0, y: 0, z: 1 },
-        z: { x: 0, y: -1, z: 0 },
-      },
-    }
+// ---------------------------------------------------------------------------
+// FrameScene — uses backend scene info, no hardcoded camera geometry
+// ---------------------------------------------------------------------------
+function FrameScene({ sceneInfo, pose }) {
+  const identityBasis = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] }
 
-    // Sliders apply CT transform; for this widget CT is fixed and camera is moved by inverse transform.
-    const cameraOrigin = mulMatVec(invRotation, subVec(apCameraExtrinsic.translation, poseTranslation))
-    const cameraBasis = {
-      x: mulMatVec(invRotation, apCameraExtrinsic.basis.x),
-      y: mulMatVec(invRotation, apCameraExtrinsic.basis.y),
-      z: mulMatVec(invRotation, apCameraExtrinsic.basis.z),
-    }
+  if (!sceneInfo) {
+    return (
+      <>
+        <ambientLight intensity={0.78} />
+        <directionalLight position={[16, 22, 12]} intensity={1.1} />
+      </>
+    )
+  }
 
-    const patientBasis = {
-      x: { x: 1, y: 0, z: 0 },
-      y: { x: 0, y: 1, z: 0 },
-      z: { x: 0, y: 0, z: 1 },
-    }
+  // Compute posed camera from backend scene info + current pose
+  const posedCamera = applyPose(sceneInfo, pose)
 
-    const volumeBasis = patientBasis
-
-    return {
-      patientOrigin,
-      patientBasis,
-      volumeOrigin,
-      volumeBasis,
-      cameraOrigin,
-      cameraBasis,
-      ctHalfMm: 28 * 0.72,
-    }
-  }, [pose])
+  // Volume centroid and half-extent in scene coords
+  const volCentroid = sceneInfo.volume.centroid
+  const volExtent = sceneInfo.volume.extent
+  // Half-extent mapped through worldToScene: world [ex, ey, ez] → scene [ex, ez, ey]
+  const halfExtentScene = [
+    volExtent[0] * WORLD_SCALE / 2,
+    volExtent[2] * WORLD_SCALE / 2,
+    volExtent[1] * WORLD_SCALE / 2,
+  ]
 
   return (
     <>
@@ -364,35 +366,42 @@ function FrameScene({ pose }) {
       <directionalLight position={[16, 22, 12]} intensity={1.1} />
       <directionalLight position={[-12, 9, -16]} intensity={0.45} />
 
-      <CTVolume origin={sceneState.volumeOrigin} cubeHalfMm={sceneState.ctHalfMm} />
-      <PatientModel origin={sceneState.patientOrigin} />
-      <APCameraModel origin={sceneState.cameraOrigin} basis={sceneState.cameraBasis} />
+      <CTVolume origin={volCentroid} halfExtent={halfExtentScene} />
+      <APCameraModel origin={posedCamera.source} basis={posedCamera.basis} />
 
-      <AxisTriad origin={sceneState.patientOrigin} basis={sceneState.patientBasis} length={3.4} opacity={0.95} />
-      <AxisTriad origin={sceneState.cameraOrigin} basis={sceneState.cameraBasis} length={2.4} opacity={0.9} />
-      <AxisTriad origin={sceneState.volumeOrigin} basis={sceneState.volumeBasis} length={2.65} opacity={0.82} />
+      <AxisTriad
+        origin={volCentroid}
+        basis={identityBasis}
+        lengths={{ x: halfExtentScene[0], y: halfExtentScene[2], z: halfExtentScene[1] }}
+        opacity={0.95}
+        labels={{ x: 'L', y: 'P', z: 'S' }}
+      />
+      <AxisTriad origin={posedCamera.source} basis={posedCamera.basis} length={2.4} opacity={0.9} />
     </>
   )
 }
 
-function FrameIllustration({ pose }) {
+function FrameIllustration({ pose, sceneInfo }) {
   const controlsRef = React.useRef(null)
+  const [resetKey, setResetKey] = React.useState(0)
 
-  const resetView = () => {
-    const controls = controlsRef.current
-    if (!controls) return
+  // Compute scene positions for auto-fit
+  const positions = React.useMemo(() => {
+    if (!sceneInfo) return null
+    const posedCamera = applyPose(sceneInfo, pose)
+    return {
+      camera: worldToScene(posedCamera.source),
+      volume: worldToScene(sceneInfo.volume.centroid),
+    }
+  }, [sceneInfo, pose])
 
-    controls.object.position.set(...FRAME_CAMERA_DEFAULT.position)
-    controls.target.set(...FRAME_CAMERA_DEFAULT.target)
-    controls.update()
-  }
+  const resetView = () => setResetKey(k => k + 1)
 
   return (
     <section className="frame-panel">
       <div className="panel-title-row">
         <div className="panel-heading">
-          <h2>Frame Sketch</h2>
-          <p>Orbit, pan, and zoom</p>
+          <h2>Scene View</h2>
         </div>
         <div className="panel-tools">
           <button type="button" className="ghost-btn mini" onClick={resetView}>
@@ -405,7 +414,7 @@ function FrameIllustration({ pose }) {
       <div className="frame-canvas-wrap" role="img" aria-label="Interactive 3D frame widget">
         <Canvas camera={{ position: FRAME_CAMERA_DEFAULT.position, fov: FRAME_CAMERA_DEFAULT.fov }} dpr={[1, 2]}>
           <color attach="background" args={['#ffffff']} />
-          <FrameScene pose={pose} />
+          <FrameScene sceneInfo={sceneInfo} pose={pose} />
           <OrbitControls
             ref={controlsRef}
             makeDefault
@@ -413,101 +422,194 @@ function FrameIllustration({ pose }) {
             dampingFactor={0.12}
             rotateSpeed={0.9}
             panSpeed={0.7}
-            minDistance={4}
-            maxDistance={22}
+            minDistance={1}
+            maxDistance={50}
             target={FRAME_CAMERA_DEFAULT.target}
           />
+          {positions && (
+            <AutoFitControls
+              controlsRef={controlsRef}
+              cameraScenePos={positions.camera}
+              volumeScenePos={positions.volume}
+              resetKey={resetKey}
+            />
+          )}
         </Canvas>
       </div>
     </section>
   )
 }
 
-function PoseAxisCard({ param, value, onChange }) {
-  const step = param.group === 'translation' ? 5 : 2
+// ---------------------------------------------------------------------------
+// HoldButton — fires immediately, then accelerates while held
+// ---------------------------------------------------------------------------
+function HoldButton({ onStep, children, className, 'aria-label': ariaLabel, rotationScale = false }) {
+  const timerRef = React.useRef(null)
+  const startTimeRef = React.useRef(0)
+
+  const stop = React.useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+  }, [])
+
+  const schedule = React.useCallback(() => {
+    const elapsed = Date.now() - startTimeRef.current
+    const steps = rotationScale
+      ? (elapsed < 600 ? 0.1 : elapsed < 1500 ? 0.5 : elapsed < 3000 ? 2 : 10)
+      : (elapsed < 600 ? 1    : elapsed < 1500 ? 5   : elapsed < 3000 ? 20  : 100)
+    const interval = Math.max(30, 80 - elapsed * 0.018)
+    timerRef.current = setTimeout(() => {
+      onStep(steps)
+      schedule()
+    }, interval)
+  }, [onStep, rotationScale])
+
+  const initialStep = rotationScale ? 0.1 : 1
+
+  const start = React.useCallback(() => {
+    stop()
+    startTimeRef.current = Date.now()
+    onStep(initialStep)
+    timerRef.current = setTimeout(schedule, 250)
+  }, [onStep, initialStep, schedule, stop])
+
+  React.useEffect(() => stop, [stop]) // cleanup on unmount
+
+  return (
+    <button
+      type="button"
+      className={className}
+      aria-label={ariaLabel}
+      onPointerDown={(e) => { e.preventDefault(); start() }}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
+    >
+      {children}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Pose Controls
+// ---------------------------------------------------------------------------
+function TranslationAxisCard({ param, value, onChange }) {
+  const STEP = 1
 
   const handleNumber = (event) => {
     const next = Number(event.target.value)
     if (Number.isNaN(next)) return
-    onChange(param.key, clamp(next, param.min, param.max))
-  }
-
-  const applyDelta = (delta) => {
-    onChange(param.key, clamp(value + delta, param.min, param.max))
+    onChange(param.key, next)
   }
 
   return (
-    <div className={`pose-row ${param.group}`}>
+    <div className="pose-row translation">
       <div className="pose-row-label">
-        <span className={`pose-axis-dot ${param.group}`} />
+        <span className="pose-axis-dot translation" />
         <span className="pose-axis-label">{param.label}</span>
       </div>
-
+      <HoldButton
+        className="axis-step-btn"
+        aria-label={`Decrease ${param.label}`}
+        onStep={(s) => onChange(param.key, (prev) => prev - s)}
+      >−</HoldButton>
       <input
-        className={`axis-range ${param.group}`}
-        type="range"
-        min={param.min}
-        max={param.max}
+        className="pose-axis-value translation-value"
+        type="number"
         step={param.step}
-        value={value}
-        onChange={(e) => onChange(param.key, Number(e.target.value))}
-        aria-label={`${param.label} slider`}
+        value={Math.round(value * 10) / 10}
+        onChange={handleNumber}
+        aria-label={`${param.label} value`}
       />
+      <HoldButton
+        className="axis-step-btn"
+        aria-label={`Increase ${param.label}`}
+        onStep={(s) => onChange(param.key, (prev) => prev + s)}
+      >+</HoldButton>
+      <button type="button" className="axis-zero-btn" onClick={() => onChange(param.key, 0)} aria-label={`Zero ${param.label}`}>0</button>
+    </div>
+  )
+}
 
-      <button type="button" className="axis-step-btn" onClick={() => applyDelta(-step)} aria-label={`-${step}`}>
-        −
-      </button>
+function RotationAxisCard({ param, value, onChange }) {
+  const step = 0.1
+  const clampRot = (v) => Math.max(param.min, Math.min(param.max, Math.round(v * 100) / 100))
 
+  const handleNumber = (event) => {
+    const next = Number(event.target.value)
+    if (Number.isNaN(next)) return
+    onChange(param.key, clampRot(next))
+  }
+
+  return (
+    <div className="pose-row rotation">
+      <div className="pose-row-label">
+        <span className="pose-axis-dot rotation" />
+        <span className="pose-axis-label">{param.label}</span>
+      </div>
+      <HoldButton
+        className="axis-step-btn"
+        aria-label={`Decrease ${param.label}`}
+        onStep={(s) => onChange(param.key, (prev) => clampRot(prev - s))}
+        rotationScale
+      >−</HoldButton>
       <input
         className="pose-axis-value"
         type="number"
         min={param.min}
         max={param.max}
-        step={param.step}
-        value={value}
+        step={step}
+        value={Math.round(value * 100) / 100}
         onChange={handleNumber}
         aria-label={`${param.label} value`}
       />
-
-      <button type="button" className="axis-step-btn" onClick={() => applyDelta(step)} aria-label={`+${step}`}>
-        +
-      </button>
-
-      <button type="button" className="axis-zero-btn" onClick={() => onChange(param.key, 0)} aria-label={`Zero ${param.label}`}>
-        0
-      </button>
+      <HoldButton
+        className="axis-step-btn"
+        aria-label={`Increase ${param.label}`}
+        onStep={(s) => onChange(param.key, (prev) => clampRot(prev + s))}
+        rotationScale
+      >+</HoldButton>
+      <button type="button" className="axis-zero-btn" onClick={() => onChange(param.key, 0)} aria-label={`Zero ${param.label}`}>0</button>
     </div>
   )
 }
 
 function PoseControlsPanel({
-  pose,
-  onChangePose,
-  onResetGroup,
-  onResetPose,
+  pose, onChangePose, onResetGroup, onResetPose,
+  preset, availablePresets, onChangePreset,
+  onFetchTransform, extrinsicMatrix, onDismissTransform,
+  onOpenIntrinsics, intrinsicsOpen, intrinsicsData, onIntrinsicsChange,
+  onApplyIntrinsics, onResetIntrinsics, onDismissIntrinsics,
 }) {
-  const translationControls = PARAM_CONFIG.filter((param) => param.group === 'translation')
-  const rotationControls = PARAM_CONFIG.filter((param) => param.group === 'rotation')
-
   return (
     <section className="pose-panel">
       <header className="pose-panel-head">
-        <div>
-          <p className="eyebrow">Pose Control</p>
-          <h2>Camera Transform</h2>
-        </div>
-        <button type="button" className="ghost-btn tiny" onClick={onResetPose}>
-          Reset Pose
-        </button>
+        <h2>Camera Pose</h2>
+        <button type="button" className="ghost-btn tiny" onClick={onResetPose}>Reset</button>
       </header>
+
+      <div className="preset-row">
+        <label className="preset-label">Preset</label>
+        <select
+          className="preset-select"
+          value={preset}
+          onChange={(e) => onChangePreset(e.target.value)}
+        >
+          {availablePresets.map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+      </div>
 
       <section className="axis-group">
         <header className="axis-group-head">
           <h3>Translation (mm)</h3>
           <button type="button" className="ghost-btn tiny" onClick={() => onResetGroup('translation')}>Zero T</button>
         </header>
-        {translationControls.map((param) => (
-          <PoseAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
+        {TRANSLATION_PARAMS.map((param) => (
+          <TranslationAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
         ))}
       </section>
 
@@ -516,139 +618,657 @@ function PoseControlsPanel({
           <h3>Rotation (deg)</h3>
           <button type="button" className="ghost-btn tiny" onClick={() => onResetGroup('rotation')}>Zero R</button>
         </header>
-        {rotationControls.map((param) => (
-          <PoseAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
+        {ROTATION_PARAMS.map((param) => (
+          <RotationAxisCard key={param.key} param={param} value={pose[param.key]} onChange={onChangePose} />
         ))}
       </section>
 
-      <p className="pose-convention">R = Rz * Ry * Rx, p_out = R*p_in + t.</p>
+      <p className="pose-convention">All offsets are in the camera's local frame.</p>
+
+      <button type="button" className="ghost-btn transform-btn" onClick={onFetchTransform}>
+        Get World-to-Camera Transform
+      </button>
+
+      {extrinsicMatrix && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onDismissTransform() }}>
+          <div className="modal-card">
+            <div className="modal-head">
+              <h3>4×4 Extrinsic Matrix (world → camera)</h3>
+              <button type="button" className="ghost-btn tiny" onClick={onDismissTransform}>✕</button>
+            </div>
+            <pre className="extrinsic-matrix">
+              {extrinsicMatrix.map((row, i) => {
+                const inner = row.map((v) => v.toFixed(6).padStart(12)).join(', ')
+                const prefix = i === 0 ? '[[' : ' ['
+                const suffix = i < extrinsicMatrix.length - 1 ? '],' : ']]'
+                return prefix + inner + suffix
+              }).join('\n')}
+            </pre>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost-btn mini"
+                onClick={() => {
+                  const text = extrinsicMatrix.map((row, i) => {
+                    const inner = row.map((v) => v.toFixed(6).padStart(12)).join(', ')
+                    const prefix = i === 0 ? '[[' : ' ['
+                    const suffix = i < extrinsicMatrix.length - 1 ? '],' : ']]'
+                    return prefix + inner + suffix
+                  }).join('\n')
+                  navigator.clipboard.writeText(text)
+                }}
+              >Copy to Clipboard</button>
+              <button type="button" className="ghost-btn mini" onClick={onDismissTransform}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button type="button" className="ghost-btn transform-btn" onClick={onOpenIntrinsics}>
+        Edit Intrinsics
+      </button>
+
+      {intrinsicsOpen && intrinsicsData && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onDismissIntrinsics() }}>
+          <div className="modal-card">
+            <div className="modal-head">
+              <h3>Camera Intrinsics (K)</h3>
+              <button type="button" className="ghost-btn tiny" onClick={onDismissIntrinsics}>✕</button>
+            </div>
+            <div className="intrinsics-grid">
+              {['fx', 'fy', 'cx', 'cy'].map((field) => (
+                <label key={field} className="intrinsics-field">
+                  <span className="intrinsics-field-label">{field}</span>
+                  <input
+                    className="intrinsics-field-input"
+                    type="number"
+                    step="0.1"
+                    value={intrinsicsData[field]}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      if (!Number.isNaN(v)) onIntrinsicsChange({ ...intrinsicsData, [field]: v })
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <pre className="extrinsic-matrix">
+              {(() => {
+                const { fx, fy, cx, cy } = intrinsicsData
+                const K = [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
+                return K.map((row, i) => {
+                  const inner = row.map((v) => v.toFixed(4).padStart(12)).join(', ')
+                  const prefix = i === 0 ? '[[' : ' ['
+                  const suffix = i < K.length - 1 ? '],' : ']]'
+                  return prefix + inner + suffix
+                }).join('\n')
+              })()}
+            </pre>
+            <div className="modal-actions">
+              <button type="button" className="ghost-btn mini" onClick={onApplyIntrinsics}>Apply</button>
+              <button type="button" className="ghost-btn mini" onClick={onResetIntrinsics}>Reset to Default</button>
+              <button type="button" className="ghost-btn mini" onClick={onDismissIntrinsics}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
 
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
 export default function App() {
   const [pose, setPose] = React.useState(INITIAL_POSE)
+  const [preset, setPreset] = React.useState('AP')
   const [drrs, setDrrs] = React.useState([])
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState('')
+  const [sceneInfo, setSceneInfo] = React.useState(null)
+  const [interactiveMode, setInteractiveMode] = React.useState(false)
+  const [extrinsicMatrix, setExtrinsicMatrix] = React.useState(null)
+  const [threshold, setThreshold] = React.useState(300)
+  const [intrinsicsOpen, setIntrinsicsOpen] = React.useState(false)
+  const [intrinsicsData, setIntrinsicsData] = React.useState(null)
+  const [targetImage, setTargetImage] = React.useState(null)
+  const [overlayAlpha, setOverlayAlpha] = React.useState(0.4)
+  const [selectedMetric, setSelectedMetric] = React.useState('ncc')
+  const [availableMetrics, setAvailableMetrics] = React.useState(['ncc'])
+  const [isRegistering, setIsRegistering] = React.useState(false)
+  const [regProgress, setRegProgress] = React.useState(null)
 
-  const posePayload = React.useMemo(() => ({ pose }), [pose])
+  const debounceTimerRef = React.useRef(null)
+  const abortControllerRef = React.useRef(null)
+  const fileInputRef = React.useRef(null)
+  const volumeInputRef = React.useRef(null)
+  const [volumeName, setVolumeName] = React.useState(null)
+  const [isUploadingVolume, setIsUploadingVolume] = React.useState(false)
+
+  // Fetch static scene geometry from backend on mount or preset change
+  React.useEffect(() => {
+    fetch(`${API_BASE}/api/scene?preset=${preset}`)
+      .then((r) => r.json())
+      .then(setSceneInfo)
+      .catch((err) => console.error('Failed to fetch scene info:', err))
+  }, [preset])
+
+  // Fetch available registration metrics on mount
+  React.useEffect(() => {
+    fetch(`${API_BASE}/api/registration/metrics`)
+      .then((r) => r.json())
+      .then((data) => setAvailableMetrics(data.metrics || ['ncc']))
+      .catch((err) => console.error('Failed to fetch metrics:', err))
+  }, [])
+
+  const availablePresets = sceneInfo?.available_presets || ['AP']
+  const posePayload = React.useMemo(() => ({ pose, preset, threshold }), [pose, preset, threshold])
   const hasDrrData = drrs.some((item) => item.image)
   const displayViews = drrs.length === 0 ? PLACEHOLDER_VIEWS : drrs
 
   const updatePose = (key, value) => {
-    setPose((prev) => ({ ...prev, [key]: Number(value) }))
+    if (typeof value === 'function') {
+      setPose((prev) => ({ ...prev, [key]: value(prev[key]) }))
+    } else {
+      setPose((prev) => ({ ...prev, [key]: Number(value) }))
+    }
+    setExtrinsicMatrix(null) // clear stale transform
   }
 
   const resetPose = () => {
     setPose(INITIAL_POSE)
     setError('')
+    setExtrinsicMatrix(null)
+  }
+
+  const changePreset = (newPreset) => {
+    setPreset(newPreset)
+    setPose(INITIAL_POSE)
+    setDrrs([])
+    setExtrinsicMatrix(null)
+    setError('')
   }
 
   const resetGroup = (group) => {
-    const groupParams = PARAM_CONFIG.filter((param) => param.group === group)
+    const groupParams = PARAM_CONFIG.filter((p) => p.group === group)
     setPose((prev) => {
       const next = { ...prev }
-      groupParams.forEach((param) => {
-        next[param.key] = 0
-      })
+      groupParams.forEach((p) => { next[p.key] = 0 })
       return next
     })
+    setExtrinsicMatrix(null)
   }
 
-  const generateDrr = async () => {
+  // Shared fetch logic — used by both manual button and interactive auto-generate
+  const fetchDrr = React.useCallback(async (payload, signal) => {
     setIsLoading(true)
     setError('')
-
     try {
       const response = await fetch(`${API_BASE}/api/drr/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(posePayload),
+        body: JSON.stringify(payload),
+        signal,
       })
-
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`)
-      }
-
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
       const data = await response.json()
       setDrrs(data.drrs || [])
     } catch (err) {
+      if (err.name === 'AbortError') return // superseded by newer request
       setError(err.message || 'Failed to generate DRR')
       setDrrs([])
     } finally {
       setIsLoading(false)
     }
+  }, [])
+
+  const generateDrr = () => fetchDrr(posePayload)
+
+  // Fetch the full 4x4 world-to-camera extrinsic matrix
+  const fetchTransform = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/camera/transform`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pose, preset }),
+      })
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      const data = await response.json()
+      setExtrinsicMatrix(data.extrinsic_4x4)
+    } catch (err) {
+      setError(err.message || 'Failed to fetch transform')
+    }
   }
+
+  // Fetch and open intrinsics modal
+  const openIntrinsics = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/intrinsics`)
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      const data = await response.json()
+      setIntrinsicsData({ fx: data.fx, fy: data.fy, cx: data.cx, cy: data.cy })
+      setIntrinsicsOpen(true)
+    } catch (err) {
+      setError(err.message || 'Failed to fetch intrinsics')
+    }
+  }
+
+  const applyIntrinsics = async () => {
+    if (!intrinsicsData) return
+    try {
+      const response = await fetch(`${API_BASE}/api/intrinsics`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(intrinsicsData),
+      })
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      setIntrinsicsOpen(false)
+      // Re-render if in interactive mode
+      if (interactiveMode) {
+        if (abortControllerRef.current) abortControllerRef.current.abort()
+        const controller = new AbortController()
+        abortControllerRef.current = controller
+        fetchDrr({ pose, preset, threshold }, controller.signal)
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to apply intrinsics')
+    }
+  }
+
+  const resetIntrinsics = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/intrinsics/reset`, { method: 'POST' })
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}`)
+      const data = await response.json()
+      setIntrinsicsData({ fx: data.fx, fy: data.fy, cx: data.cx, cy: data.cy })
+    } catch (err) {
+      setError(err.message || 'Failed to reset intrinsics')
+    }
+  }
+
+  // --- Registration handlers ---
+  const handleVolumeUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingVolume(true)
+    setError(null)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const response = await fetch(`${API_BASE}/api/volume/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || `Upload failed with status ${response.status}`)
+      }
+      const data = await response.json()
+      setVolumeName(data.filename || file.name)
+      setSceneInfo(data)
+      setDrrs([])
+      setTargetImage(null)
+    } catch (err) {
+      setError(err.message || 'Failed to upload volume')
+    } finally {
+      setIsUploadingVolume(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleClearVolume = async () => {
+    setError(null)
+    try {
+      const response = await fetch(`${API_BASE}/api/volume/clear`, { method: 'POST' })
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.detail || 'Failed to clear volume')
+      }
+      setVolumeName(null)
+      setSceneInfo(null)
+      setDrrs([])
+      setTargetImage(null)
+    } catch (err) {
+      setError(err.message || 'Failed to clear volume')
+    }
+  }
+
+  const handleTargetUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const response = await fetch(`${API_BASE}/api/registration/target`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) throw new Error(`Upload failed with status ${response.status}`)
+      const data = await response.json()
+      setTargetImage(data.target_image)
+    } catch (err) {
+      setError(err.message || 'Failed to upload target image')
+    }
+    // Reset file input so the same file can be re-uploaded
+    e.target.value = ''
+  }
+
+  const clearTarget = async () => {
+    try {
+      await fetch(`${API_BASE}/api/registration/target`, { method: 'DELETE' })
+      setTargetImage(null)
+    } catch (err) {
+      setError(err.message || 'Failed to clear target')
+    }
+  }
+
+  const startRegistration = async () => {
+    setIsRegistering(true)
+    setRegProgress(null)
+    setError('')
+    try {
+      const response = await fetch(`${API_BASE}/api/registration/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pose, preset, threshold,
+          metric: selectedMetric,
+          report_every_n: 5,
+        }),
+      })
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.detail || `Registration failed with status ${response.status}`)
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const events = buffer.split('\n\n')
+        buffer = events.pop() // keep incomplete event
+
+        for (const eventStr of events) {
+          if (!eventStr.trim()) continue
+          const lines = eventStr.split('\n')
+          let eventType = 'message'
+          let data = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.slice(7)
+            if (line.startsWith('data: ')) data = line.slice(6)
+          }
+          if (!data) continue
+
+          if (eventType === 'progress') {
+            const progress = JSON.parse(data)
+            setRegProgress({ iteration: progress.iteration, metric_value: progress.metric_value })
+            setDrrs([{ view: 'Registration', image: progress.drr }])
+            setPose(progress.pose)
+          } else if (eventType === 'complete') {
+            const result = JSON.parse(data)
+            setRegProgress({ iteration: result.iterations, metric_value: result.metric_value })
+            setDrrs([{ view: 'Registration', image: result.drr }])
+            setPose(result.pose)
+            setIsRegistering(false)
+          } else if (eventType === 'cancelled') {
+            setIsRegistering(false)
+          } else if (eventType === 'error') {
+            const err = JSON.parse(data)
+            setError(err.message)
+            setIsRegistering(false)
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setError(err.message || 'Registration failed')
+      }
+    } finally {
+      setIsRegistering(false)
+    }
+  }
+
+  const cancelRegistration = async () => {
+    try {
+      await fetch(`${API_BASE}/api/registration/cancel`, { method: 'POST' })
+    } catch (err) {
+      console.error('Failed to cancel registration:', err)
+    }
+  }
+
+  // Interactive mode: auto-generate DRR on pose change with debounce + abort
+  React.useEffect(() => {
+    if (!interactiveMode) return
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    debounceTimerRef.current = setTimeout(() => {
+      if (abortControllerRef.current) abortControllerRef.current.abort()
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      fetchDrr({ pose, preset, threshold }, controller.signal)
+    }, 150)
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    }
+  }, [pose, preset, threshold, interactiveMode, fetchDrr])
+
+  // Cleanup on unmount
+  React.useEffect(() => () => {
+    if (abortControllerRef.current) abortControllerRef.current.abort()
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+  }, [])
 
   return (
     <main className="app-shell">
       <header className="topbar-card">
         <div className="topbar-head">
-          <p className="eyebrow">2D/3D Registration</p>
-          <h1>AP Camera Workspace</h1>
-          <p className="subtitle">Keep CT fixed, tune camera pose, and regenerate DRR projections.</p>
+          <h1>DRR Workbench</h1>
         </div>
-
         <div className="topbar-status">
           <span className={`status-chip ${isLoading ? 'busy' : hasDrrData ? 'ok' : 'idle'}`}>
-            {isLoading ? 'Rendering...' : hasDrrData ? 'Views ready' : 'No DRR yet'}
+            {isUploadingVolume ? 'Loading volume…' : isLoading ? 'Rendering…' : hasDrrData ? 'DRR ready' : 'No DRR yet'}
           </span>
-          <p className="status-note">Frame widget updates live with each axis change.</p>
+          {volumeName && <span className="volume-name">{volumeName}</span>}
         </div>
-
         <div className="topbar-actions">
-          <button type="button" className="primary-btn" onClick={generateDrr} disabled={isLoading}>
-            {isLoading ? 'Generating DRR...' : 'Generate DRR'}
+          <input
+            type="file"
+            ref={volumeInputRef}
+            accept=".nii,.nii.gz,.gz,.hdr,.img"
+            style={{ display: 'none' }}
+            onChange={handleVolumeUpload}
+          />
+          <button
+            type="button"
+            className="secondary-btn"
+            onClick={() => volumeInputRef.current?.click()}
+            disabled={isUploadingVolume || isRegistering}
+          >
+            {isUploadingVolume ? 'Loading…' : 'Load Volume'}
           </button>
-          <button type="button" className="ghost-btn" onClick={resetPose}>
-            Reset Pose
-          </button>
+          {volumeName && (
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={handleClearVolume}
+              disabled={isUploadingVolume || isRegistering || isLoading}
+            >
+              Clear Volume
+            </button>
+          )}
+          {!interactiveMode && (
+            <button type="button" className="primary-btn" onClick={generateDrr} disabled={isLoading}>
+              {isLoading ? 'Generating…' : 'Generate DRR'}
+            </button>
+          )}
+          <label className="mode-toggle">
+            <input
+              type="checkbox"
+              checked={interactiveMode}
+              onChange={(e) => setInteractiveMode(e.target.checked)}
+            />
+            <span className="mode-toggle-track" />
+            <span className="mode-toggle-label">{interactiveMode ? 'Interactive' : 'Manual'}</span>
+          </label>
         </div>
       </header>
 
       <div className="workspace-wrap">
         {error ? <p className="error-text">{error}</p> : null}
         <section className="workspace-layout">
-        <section className="results-panel">
-          <header className="results-head">
-            <div>
-              <p className="eyebrow">Output</p>
-              <h2>DRR Views</h2>
-            </div>
-            <p className="results-note">Backend stub projection.</p>
-          </header>
-
-          <section className="results-grid">
-            {displayViews.map((drr) => (
-              <figure key={drr.view} className="drr-tile">
-                <div className="drr-viewport">
-                  {drr.image ? (
-                    <img src={drr.image} alt={drr.view} />
-                  ) : (
-                    <div className={`drr-empty ${isLoading ? 'loading' : ''}`}>
-                      {isLoading ? 'Rendering projection...' : 'Generate to load image'}
-                    </div>
-                  )}
-                  {isLoading && drr.image ? <div className="tile-overlay">Updating...</div> : null}
-                </div>
-                <figcaption>
-                  <span>{drr.view}</span>
-                  <span className="view-tag">{drr.image ? 'Ready' : 'Pending'}</span>
-                </figcaption>
-              </figure>
-            ))}
+          <section className="results-panel">
+            {/* SVG filter for red-channel overlay */}
+            <svg style={{position:'absolute',width:0,height:0}}>
+              <defs>
+                <filter id="red-channel">
+                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+                </filter>
+              </defs>
+            </svg>
+            <header className="results-head">
+              <h2>Projection</h2>
+              <p className="results-note">
+                {isRegistering
+                  ? `Registering… iter ${regProgress?.iteration || 0}`
+                  : interactiveMode ? 'Auto-updates on pose change.' : 'Click Generate DRR to render.'}
+              </p>
+            </header>
+            <section className="results-grid">
+              {displayViews.map((drr) => (
+                <figure key={drr.view} className="drr-tile">
+                  <div className="drr-viewport">
+                    {drr.image ? (
+                      <img src={drr.image} alt={drr.view} />
+                    ) : (
+                      <div className={`drr-empty ${isLoading ? 'loading' : ''}`}>
+                        {isLoading ? 'Rendering…' : interactiveMode ? 'Adjust pose to generate' : 'Click Generate DRR'}
+                      </div>
+                    )}
+                    {targetImage && (
+                      <img
+                        src={targetImage}
+                        alt="Target overlay"
+                        className="target-overlay"
+                        style={{ opacity: overlayAlpha }}
+                      />
+                    )}
+                    {isLoading && drr.image ? <div className="tile-overlay">Updating…</div> : null}
+                  </div>
+                  <figcaption>
+                    <span className="view-tag">{drr.image ? 'Ready' : 'Pending'}</span>
+                  </figcaption>
+                </figure>
+              ))}
+            </section>
+            {targetImage && (
+              <div className="overlay-controls">
+                <label className="overlay-alpha-label">Overlay</label>
+                <input
+                  type="range"
+                  min={0} max={1} step={0.05}
+                  value={overlayAlpha}
+                  onChange={(e) => setOverlayAlpha(Number(e.target.value))}
+                  className="overlay-alpha-slider"
+                />
+                <span className="overlay-alpha-value">{Math.round(overlayAlpha * 100)}%</span>
+              </div>
+            )}
           </section>
-        </section>
 
-        <FrameIllustration pose={pose} />
-        <PoseControlsPanel
-          pose={pose}
-          onChangePose={updatePose}
-          onResetGroup={resetGroup}
-          onResetPose={resetPose}
-        />
-      </section>
+          <div className="right-col">
+            <FrameIllustration pose={pose} sceneInfo={sceneInfo} />
+            <section className="threshold-panel">
+              <label className="threshold-label">Threshold (HU)</label>
+              <input
+                className="threshold-input"
+                type="number"
+                step={50}
+                value={threshold}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  if (!Number.isNaN(v)) setThreshold(v)
+                }}
+              />
+            </section>
+            <section className="registration-panel">
+              <h3 className="reg-panel-title">Registration</h3>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/bmp"
+                style={{ display: 'none' }}
+                onChange={handleTargetUpload}
+              />
+              <div className="reg-target-row">
+                {targetImage ? (
+                  <>
+                    <span className="reg-target-status">Target loaded</span>
+                    <button type="button" className="ghost-btn tiny" onClick={clearTarget}>Clear</button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="ghost-btn mini"
+                    onClick={() => fileInputRef.current?.click()}
+                  >Upload Target X-ray</button>
+                )}
+              </div>
+              <div className="reg-metric-row">
+                <label className="reg-metric-label">Metric</label>
+                <select
+                  className="preset-select"
+                  value={selectedMetric}
+                  onChange={(e) => setSelectedMetric(e.target.value)}
+                >
+                  {availableMetrics.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="reg-btn-group">
+                {isRegistering ? (
+                  <button type="button" className="ghost-btn mini reg-cancel-btn" onClick={cancelRegistration}>Cancel</button>
+                ) : (
+                  <button
+                    type="button"
+                    className="primary-btn mini"
+                    disabled={!targetImage}
+                    onClick={startRegistration}
+                  >Start Registration</button>
+                )}
+              </div>
+              {regProgress && (
+                <div className="reg-progress">
+                  <span>Iter: {regProgress.iteration}</span>
+                  <span>Metric: {regProgress.metric_value?.toFixed(4)}</span>
+                </div>
+              )}
+            </section>
+            <PoseControlsPanel
+              pose={pose}
+              onChangePose={updatePose}
+              onResetGroup={resetGroup}
+              onResetPose={resetPose}
+              preset={preset}
+              availablePresets={availablePresets}
+              onChangePreset={changePreset}
+              onFetchTransform={fetchTransform}
+              extrinsicMatrix={extrinsicMatrix}
+              onDismissTransform={() => setExtrinsicMatrix(null)}
+              onOpenIntrinsics={openIntrinsics}
+              intrinsicsOpen={intrinsicsOpen}
+              intrinsicsData={intrinsicsData}
+              onIntrinsicsChange={setIntrinsicsData}
+              onApplyIntrinsics={applyIntrinsics}
+              onResetIntrinsics={resetIntrinsics}
+              onDismissIntrinsics={() => setIntrinsicsOpen(false)}
+            />
+          </div>
+        </section>
       </div>
     </main>
   )

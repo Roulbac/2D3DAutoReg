@@ -1,0 +1,15 @@
+[project]
+name = "drr-backend"
+version = "0.1.0"
+description = "FastAPI backend for 2D/3D auto-registration DRR workbench"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.116",
+    "uvicorn[standard]>=0.35",
+    "pillow>=11.0",
+    "numpy>=2.0",
+    "torch>=2.10",
+    "SimpleITK>=2.3",
+    "scipy>=1.11",
+    "python-multipart>=0.0.9",
+]
