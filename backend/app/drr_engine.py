@@ -7,7 +7,12 @@ pipeline that auto-selects device (CUDA → MPS → CPU).
 import base64
 import logging
 import math
+import os
 from io import BytesIO
+
+# Enable CPU fallback for MPS ops missing backward (e.g. grid_sampler_3d_backward).
+# Must be set before importing torch.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 import nibabel as nib
 import numpy as np

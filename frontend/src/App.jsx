@@ -768,6 +768,7 @@ export default function App() {
 
       ws.onopen = () => {
         console.log('WebSocket connected')
+        setError('')
       }
 
       ws.onmessage = (event) => {
@@ -797,9 +798,14 @@ export default function App() {
 
       ws.onclose = () => {
         console.log('WebSocket disconnected')
-        wsRef.current = null
-        sessionIdRef.current = null
-        setSessionReady(false)
+        // Only clear refs if this is still the active WebSocket
+        // (React strict mode double-mount can cause a stale ws1.onclose
+        // to fire after ws2 has already been assigned to wsRef)
+        if (wsRef.current === ws) {
+          wsRef.current = null
+          sessionIdRef.current = null
+          setSessionReady(false)
+        }
         if (!disposed) {
           reconnectTimer = setTimeout(connect, 2000)
         }
@@ -1269,7 +1275,7 @@ export default function App() {
                   <button
                     type="button"
                     className="primary-btn mini"
-                    disabled={!targetImage}
+                    disabled={!targetImage || !sessionReady}
                     onClick={startRegistration}
                   >Start Registration</button>
                 )}

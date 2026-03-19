@@ -63,13 +63,17 @@ check-data:
 dev: install check-data ## Run backend + frontend concurrently
 	@echo "Starting backend on :$(BACKEND_PORT) and frontend on :$(FRONTEND_PORT) …"
 	@trap 'kill 0' INT TERM; \
-	$(UVICORN) app.main:app --reload --host 0.0.0.0 --port $(BACKEND_PORT) \
+	$(UVICORN) app.main:app --reload \
+		--reload-dir $(BACKEND_DIR)/app \
+		--host 0.0.0.0 --port $(BACKEND_PORT) \
 		--app-dir $(BACKEND_DIR) & \
 	cd $(FRONTEND_DIR) && $(NPM) run dev & \
 	wait
 
 backend: install-backend check-data ## Run backend only
-	$(UVICORN) app.main:app --reload --host 0.0.0.0 --port $(BACKEND_PORT) \
+	$(UVICORN) app.main:app --reload \
+		--reload-dir $(BACKEND_DIR)/app \
+		--host 0.0.0.0 --port $(BACKEND_PORT) \
 		--app-dir $(BACKEND_DIR)
 
 frontend: install-frontend ## Run frontend only
