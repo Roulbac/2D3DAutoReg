@@ -3,11 +3,10 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { Line, OrbitControls, Text } from '@react-three/drei'
 import * as THREE from 'three'
 
-// Keep empty-string env values (used in cloud deploys for same-origin API calls).
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 const WS_BASE = API_BASE
   ? API_BASE.replace(/^http/, 'ws')
-  : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
+  : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
 
 const TRANSLATION_PARAMS = [
   { key: 'tx', label: 'Tx', step: 1, unit: 'mm', group: 'translation' },
@@ -833,8 +832,8 @@ export default function App() {
   React.useEffect(() => {
     if (!sessionReady) return
     fetch(apiUrl(`/api/scene?preset=${preset}`))
-      .then((r) => r.json())
-      .then(setSceneInfo)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setSceneInfo(data) })
       .catch((err) => console.error('Failed to fetch scene info:', err))
   }, [preset, sessionReady, apiUrl])
 

@@ -5,7 +5,7 @@
 """Deploy the 2D/3D AutoReg workbench to Modal cloud.
 
 Usage:
-    uvx modal deploy deploy_modal.py        # deploy to Modal (prints public URL)
+    uvx modal serve deploy_modal.py        # deploy to Modal (prints public URL)
 
 Prerequisites:
     uvx modal token new               # one-time Modal authentication
@@ -26,11 +26,9 @@ image = (
     )
     # Python backend dependencies via uv (locked, single source of truth)
     .uv_sync("backend")
-    # Copy frontend source, build with relative URLs, then clean up node_modules
-    .add_local_dir("frontend", remote_path="/app/frontend", copy=True)
+    .add_local_dir("frontend", remote_path="/app/frontend", copy=True, ignore=["node_modules", "dist"])
     .run_commands(
-        "cd /app/frontend && VITE_API_BASE_URL='' npm install && npm run build",
-        "rm -rf /app/frontend/node_modules",
+        "cd /app/frontend && npm install && npm run build && rm -rf /app/frontend/node_modules",
     )
     # Copy backend source
     .add_local_dir("backend/app", remote_path="/app/backend/app", copy=True)
