@@ -3,6 +3,10 @@
 A web-based workbench for **2D/3D image registration** in interventional imaging. Load a CT volume (NIfTI), render synthetic X-rays (DRRs) at arbitrary 6-DOF poses, and automatically register the 3D volume to a target X-ray — all in the browser, with live streaming progress.
 
 <p align="center">
+  <video src="assets/demo.mp4" autoplay loop muted playsinline width="720"></video>
+</p>
+
+<p align="center">
   <img src="assets/screenshot_ui.png" alt="DRR Workbench — full UI with rendered AP X-ray" width="720" />
 </p>
 
@@ -39,7 +43,7 @@ This workbench implements the full pipeline:
 
 **Device-agnostic** — Same PyTorch pipeline runs on CUDA, MPS (Apple Silicon), and CPU with automatic device selection and fallbacks.
 
-**Cloud deployment** — A single `deploy_modal.py` script builds and serves the full stack on Modal: Python backend via `uv`, React frontend via `npm run build`, static files served from FastAPI, T4 GPU allocated per function invocation.
+**Cloud deployment** — A single `modal_app.py` script builds and serves the full stack on Modal: Python backend via `uv`, React frontend via `npm run build`, static files served from FastAPI, T4 GPU allocated per function invocation.
 
 ---
 
@@ -93,8 +97,8 @@ npm install && npm run dev
 
 ```bash
 uvx modal token new                     # one-time auth
-uvx modal serve deploy_modal.py         # ephemeral dev serve (hot reload)
-uvx modal deploy deploy_modal.py        # permanent deploy
+uvx modal serve modal_app.py         # ephemeral dev serve (hot reload)
+uvx modal deploy modal_app.py        # permanent deploy
 ```
 
 ---

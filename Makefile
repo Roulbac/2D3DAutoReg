@@ -82,7 +82,7 @@ frontend: install-frontend ## Run frontend only
 # ── Deploy ─────────────────────────────────────────────────────────
 
 deploy: ## Deploy to Modal cloud (GPU)
-	uv run deploy_modal.py
+	uv run modal_app.py
 
 # ── Clean ───────────────────────────────────────────────────────────
 
