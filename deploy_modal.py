@@ -24,18 +24,8 @@ image = (
         "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
         "apt-get install -y nodejs",
     )
-    # Python backend dependencies (heavy layer — cached aggressively)
-    .pip_install(
-        "fastapi>=0.116",
-        "uvicorn[standard]>=0.35",
-        "pillow>=11.0",
-        "numpy>=2.0",
-        "torch>=2.10",
-        "SimpleITK>=2.3",
-        "scipy>=1.11",
-        "nibabel>=5.0",
-        "python-multipart>=0.0.9",
-    )
+    # Python backend dependencies via uv (locked, single source of truth)
+    .uv_sync("backend")
     # Copy frontend source, build with relative URLs, then clean up node_modules
     .add_local_dir("frontend", remote_path="/app/frontend")
     .run_commands(
