@@ -3,7 +3,7 @@
 A web-based workbench for **2D/3D image registration** in interventional imaging. Load a CT volume (NIfTI), render synthetic X-rays (DRRs) at arbitrary 6-DOF poses, and automatically register the 3D volume to a target X-ray — all in the browser, with live streaming progress.
 
 <p align="center">
-  <video src="assets/demo.mp4" autoplay loop muted playsinline width="720"></video>
+  <img src="assets/demo.gif" alt="DRR Workbench demo" width="720" />
 </p>
 
 <p align="center">
