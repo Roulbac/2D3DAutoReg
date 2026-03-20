@@ -48,7 +48,7 @@ image = (
 
 @app.function(
     image=image,
-    gpu="T4",
+    gpu="L40S",
     timeout=600,
 )
 @modal.concurrent(max_inputs=10)
