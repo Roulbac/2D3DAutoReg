@@ -2,7 +2,14 @@
 
 A web-based workbench for **2D/3D image registration** in interventional imaging. Load a CT volume (NIfTI), render synthetic X-rays (DRRs) at arbitrary 6-DOF poses, and automatically register the 3D volume to a target X-ray — all in the browser, with live streaming progress.
 
-Deployed on Modal cloud with a GPU-accelerated backend. No installation required to try it.
+<p align="center">
+  <img src="assets/screenshot_ui.png" alt="DRR Workbench — full UI with rendered AP X-ray" width="720" />
+</p>
+
+<p align="center">
+  <img src="assets/drr_ap.png" alt="DRR — anterior-posterior view" width="256" />
+  <img src="assets/drr_lateral.png" alt="DRR — lateral view" width="256" />
+</p>
 
 ---
 
@@ -24,11 +31,11 @@ This workbench implements the full pipeline:
 
 **DRR rendering** — Fully vectorized cone-beam ray tracer built in PyTorch. Rays are cast from a point source through the volume, sampled via trilinear interpolation (`grid_sample`), and attenuated via Beer-Lambert law using HU-derived linear attenuation coefficients. Memory-efficient tiled processing (4096 rays/tile on CPU/MPS, all-at-once on CUDA).
 
-**Registration** — Scipy Powell optimizer (gradient-free) with four differentiable similarity metrics: Normalized Cross-Correlation (NCC), gradient correlation, Mean Reciprocal Squared Difference (MRSD), and Mutual Information. Intermediate results stream to the frontend via WebSocket on every function evaluation.
+**Registration** — Scipy Powell optimizer (gradient-free) with four similarity metrics: Normalized Cross-Correlation (NCC), gradient correlation, Mean Reciprocal Squared Difference (MRSD), and Mutual Information. Intermediate results stream to the frontend via WebSocket on every function evaluation.
 
 **Multi-user session isolation** — Each browser tab opens a WebSocket that creates an independent session with its own `DRREngine` and optimizer state. A background reaper cleans up stale sessions after 1 hour of inactivity.
 
-**Identical math frontend ↔ backend** — The 6-DOF pose parameterization (camera-relative translation + rotation conjugated to world frame) is implemented identically in Python and JavaScript. This prevents any visual discontinuity when the frontend previews a pose before the backend renders it.
+**Identical math frontend and backend** — The 6-DOF pose parameterization (camera-relative translation + rotation conjugated to world frame) is implemented identically in Python and JavaScript, preventing visual discontinuity when the frontend previews a pose before the backend renders it.
 
 **Device-agnostic** — Same PyTorch pipeline runs on CUDA, MPS (Apple Silicon), and CPU with automatic device selection and fallbacks.
 
@@ -61,16 +68,6 @@ Browser
 
 ## Quick start
 
-### Cloud (no install)
-
-```
-https://roulbac--2d3d-autoreg-web-dev.modal.run
-```
-
-Upload `sample_data/HN_P001.nii.gz`, click **Generate DRR**, then try **Start Registration** with the included target image.
-
-### Local development
-
 **Requirements:** Python 3.12+, Node 20+, [`uv`](https://docs.astral.sh/uv/)
 
 ```bash
@@ -95,9 +92,9 @@ npm install && npm run dev
 ### Cloud deployment (Modal)
 
 ```bash
-uvx modal token new          # one-time auth
-uvx modal serve deploy_modal.py   # ephemeral dev serve (hot reload)
-uvx modal deploy deploy_modal.py  # permanent deploy
+uvx modal token new                     # one-time auth
+uvx modal serve deploy_modal.py         # ephemeral dev serve (hot reload)
+uvx modal deploy deploy_modal.py        # permanent deploy
 ```
 
 ---
@@ -107,7 +104,7 @@ uvx modal deploy deploy_modal.py  # permanent deploy
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 18, Three.js, @react-three/fiber, Vite |
-| Backend | FastAPI, PyTorch ≥ 2.10, SimpleITK, nibabel, scipy |
+| Backend | FastAPI, PyTorch >= 2.10, SimpleITK, nibabel, scipy |
 | Packaging | uv (Python), npm (Node) |
 | Cloud | Modal (ASGI, T4 GPU, concurrent inputs) |
 
@@ -117,5 +114,5 @@ uvx modal deploy deploy_modal.py  # permanent deploy
 
 | File | Description |
 |------|-------------|
-| `sample_data/HN_P001.nii.gz` | Head/neck CT volume, 512×512×196 voxels (26 MB) |
-| `sample_data/target_tx10_ry5.png` | Target X-ray rendered at tx=10 mm, ry=5° — use to verify registration |
+| `sample_data/HN_P001.nii.gz` | Head/neck CT volume, 512x512x196 voxels (26 MB) |
+| `sample_data/target_tx10_ry5.png` | Target X-ray rendered at tx=10 mm, ry=5 deg — use to verify registration |
