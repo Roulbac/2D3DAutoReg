@@ -4,7 +4,7 @@
 #   make dev          Run backend and frontend concurrently
 #   make backend      Run backend only
 #   make frontend     Run frontend only
-#   make docker       Run everything in Docker (CPU-only)
+#   make deploy       Deploy to Modal cloud (GPU)
 #   make clean        Remove generated artifacts
 #
 # Requirements: Python 3.11+, Node 20+, sample_data/HN_P001.nii.gz
@@ -34,7 +34,7 @@ export VITE_API_BASE_URL := http://localhost:$(BACKEND_PORT)
 # ── Phony targets ───────────────────────────────────────────────────
 
 .PHONY: install install-backend install-frontend \
-        dev backend frontend docker clean check-data check-uv help
+        dev backend frontend deploy clean check-data check-uv help
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | \
@@ -79,10 +79,10 @@ backend: install-backend check-data ## Run backend only
 frontend: install-frontend ## Run frontend only
 	cd $(FRONTEND_DIR) && $(NPM) run dev
 
-# ── Docker ──────────────────────────────────────────────────────────
+# ── Deploy ─────────────────────────────────────────────────────────
 
-docker: ## Run via Docker Compose (CPU-only)
-	docker compose up --build
+deploy: ## Deploy to Modal cloud (GPU)
+	uv run deploy_modal.py
 
 # ── Clean ───────────────────────────────────────────────────────────
 

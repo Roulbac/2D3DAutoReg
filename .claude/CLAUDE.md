@@ -4,12 +4,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Docker (recommended for first run)
-```bash
-docker compose up --build   # Start both frontend and backend
-docker compose down         # Stop all services
-```
-
 ### Backend (FastAPI + uv)
 ```bash
 cd backend
