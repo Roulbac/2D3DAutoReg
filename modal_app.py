@@ -22,11 +22,26 @@ image = (
     )
     # Python backend dependencies via uv (locked, single source of truth)
     .uv_sync("backend")
-    .add_local_dir("frontend", remote_path="/app/frontend", copy=True, ignore=["node_modules", "dist"])
-    .run_commands(
-        "cd /app/frontend && npm install && npm run build && rm -rf /app/frontend/node_modules",
+    # Copy frontend manifests first so dependency install stays cached when source changes.
+    .add_local_file(
+        "frontend/package.json", remote_path="/build/frontend/package.json", copy=True
     )
-    # Copy backend source
+    .add_local_file(
+        "frontend/package-lock.json",
+        remote_path="/build/frontend/package-lock.json",
+        copy=True,
+    )
+    .run_commands("mkdir -p /build/frontend && cd /build/frontend && npm ci")
+    .add_local_dir(
+        "frontend",
+        remote_path="/build/frontend",
+        copy=True,
+        ignore=["node_modules", "dist", "package.json", "package-lock.json"],
+    )
+    .run_commands(
+        "cd /build/frontend && npm run build && mkdir -p /app/frontend && cp -r /build/frontend/dist /app/frontend/dist && rm -rf /build/frontend",
+    )
+    # Copy backend runtime source last so code changes do not invalidate dependency layers.
     .add_local_dir("backend/app", remote_path="/app/backend/app", copy=True)
 )
 
