@@ -42,3 +42,6 @@ coverage/
 *.log
 *.pid
 *.pid.lock
+
+# Claude worktrees
+.claude/worktrees/
