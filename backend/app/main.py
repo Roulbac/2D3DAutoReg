@@ -83,8 +83,11 @@ async def _stale_session_reaper():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _default_nifti_path
-    _default_nifti_path = os.environ.get("NIFTI_PATH", "sample_data/HN_P001.nii.gz")
-    logger.info("Default NIFTI path: %s", _default_nifti_path)
+    _default_nifti_path = os.environ.get("NIFTI_PATH")
+    if _default_nifti_path:
+        logger.info("Default NIFTI path: %s", _default_nifti_path)
+    else:
+        logger.info("No default NIFTI path configured; sessions start without a volume")
     async with anyio.create_task_group() as tg:
         tg.start_soon(_stale_session_reaper)
         yield

@@ -5,7 +5,7 @@
 #   make backend      Run backend only
 #   make frontend     Run frontend only
 #   make deploy       Deploy to Modal cloud (GPU)
-#   make clean        Remove generated artifacts
+#   make clean        Stop backend/frontend and remove generated artifacts
 #
 # Requirements: Python 3.11+, Node 20+, sample_data/HN_P001.nii.gz
 # ─────────────────────────────────────────────────────────────────────
@@ -86,7 +86,17 @@ deploy: ## Deploy to Modal cloud (GPU)
 
 # ── Clean ───────────────────────────────────────────────────────────
 
-clean: ## Remove venv, node_modules, build artifacts
+clean: ## Stop dev servers, remove venv, node_modules, build artifacts
+	@echo "Stopping services on :$(BACKEND_PORT) and :$(FRONTEND_PORT) ..."
+	@for port in $(BACKEND_PORT) $(FRONTEND_PORT); do \
+		pids=$$(lsof -ti tcp:$$port 2>/dev/null); \
+		if [ -n "$$pids" ]; then \
+			echo "Killing process(es) on :$$port -> $$pids"; \
+			kill $$pids; \
+		else \
+			echo "No process found on :$$port"; \
+		fi; \
+	done
 	rm -rf $(VENV_DIR)
 	rm -rf $(FRONTEND_DIR)/node_modules
 	rm -rf $(FRONTEND_DIR)/dist

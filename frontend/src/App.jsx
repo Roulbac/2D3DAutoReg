@@ -3,8 +3,11 @@ import { Canvas, useThree } from '@react-three/fiber'
 import { Line, OrbitControls, Text } from '@react-three/drei'
 import * as THREE from 'three'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-const WS_BASE = API_BASE.replace(/^http/, 'ws')
+// Keep empty-string env values (used in cloud deploys for same-origin API calls).
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const WS_BASE = API_BASE
+  ? API_BASE.replace(/^http/, 'ws')
+  : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
 
 const TRANSLATION_PARAMS = [
   { key: 'tx', label: 'Tx', step: 1, unit: 'mm', group: 'translation' },

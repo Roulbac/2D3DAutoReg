@@ -5,10 +5,10 @@
 """Deploy the 2D/3D AutoReg workbench to Modal cloud.
 
 Usage:
-    uv run deploy_modal.py        # deploy to Modal (prints public URL)
+    uvx modal deploy deploy_modal.py        # deploy to Modal (prints public URL)
 
 Prerequisites:
-    modal token new               # one-time Modal authentication
+    uvx modal token new               # one-time Modal authentication
 """
 
 import modal
@@ -27,17 +27,13 @@ image = (
     # Python backend dependencies via uv (locked, single source of truth)
     .uv_sync("backend")
     # Copy frontend source, build with relative URLs, then clean up node_modules
-    .add_local_dir("frontend", remote_path="/app/frontend")
+    .add_local_dir("frontend", remote_path="/app/frontend", copy=True)
     .run_commands(
         "cd /app/frontend && VITE_API_BASE_URL='' npm install && npm run build",
         "rm -rf /app/frontend/node_modules",
     )
     # Copy backend source
-    .add_local_dir("backend/app", remote_path="/app/backend/app")
-    # Copy sample CT volume
-    .add_local_dir("sample_data", remote_path="/app/sample_data")
-    # Default volume path
-    .env({"NIFTI_PATH": "/app/sample_data/HN_P001.nii.gz"})
+    .add_local_dir("backend/app", remote_path="/app/backend/app", copy=True)
 )
 
 
@@ -45,8 +41,8 @@ image = (
     image=image,
     gpu="T4",
     timeout=600,
-    allow_concurrent_inputs=10,
 )
+@modal.concurrent(max_inputs=10)
 @modal.asgi_app()
 def web():
     import sys
